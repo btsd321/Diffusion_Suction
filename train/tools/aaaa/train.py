@@ -102,7 +102,7 @@ def generate_list(start, end, step):
 LOG_NAME = 'train'  #训练保存路径
 # CHECKPOINT_PATH = 'checkpoint.tar'
 CHECKPOINT_PATH = None
-DATASET_DIR = '/opt/data/private/suctionnet-Packag/data_gen_for_package/h5_dataset_change/train'
+DATASET_DIR = '/home/lixinlong/Project/pose_detect_train/Data/GraspNet'
 TRAIN_CYCLE_RANGES = generate_list(0, 480, 20)                           
 TRAIN_SCENE_RANGE = [1,51]  
 TEST_CYCLE_RANGE =  [480, 490]
