@@ -36,20 +36,19 @@ class FurthestPointSampling(Function):
     def forward(ctx, xyz, npoint):
         # type: (Any, torch.Tensor, int) -> torch.Tensor
         r"""
-        Uses iterative furthest point sampling to select a set of npoint features that have the largest
-        minimum distance
+        使用迭代的最远点采样方法，选择一组具有最大最小距离的npoint个特征点
 
-        Parameters
+        参数
         ----------
         xyz : torch.Tensor
-            (B, N, 3) tensor where N > npoint
+            (B, N, 3) 张量，N > npoint，表示输入点云的三维坐标
         npoint : int32
-            number of features in the sampled set
+            需要采样的特征点数量
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, npoint) tensor containing the set
+            (B, npoint) 张量，包含采样得到的点的索引
         """
         out = _ext.furthest_point_sampling(xyz, npoint)
 
@@ -70,19 +69,20 @@ class GatherOperation(Function):
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
+        根据索引从特征张量中收集指定的特征
 
-        Parameters
+        参数
         ----------
         features : torch.Tensor
-            (B, C, N) tensor
+            (B, C, N) 特征张量
 
         idx : torch.Tensor
-            (B, npoint) tensor of the features to gather
+            (B, npoint) 需要收集的特征索引
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, C, npoint) tensor
+            (B, C, npoint) 收集后的特征张量
         """
 
         ctx.save_for_backward(idx, features)
@@ -106,20 +106,21 @@ class ThreeNN(Function):
     def forward(ctx, unknown, known):
         # type: (Any, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
-            Find the three nearest neighbors of unknown in known
-        Parameters
+        查找unknown中每个点在known中的三个最近邻点
+
+        参数
         ----------
         unknown : torch.Tensor
-            (B, n, 3) tensor of known features
+            (B, n, 3) 需要查找最近邻的点
         known : torch.Tensor
-            (B, m, 3) tensor of unknown features
+            (B, m, 3) 参考点集
 
-        Returns
+        返回
         -------
         dist : torch.Tensor
-            (B, n, 3) l2 distance to the three nearest neighbors
+            (B, n, 3) 到三个最近邻的欧氏距离
         idx : torch.Tensor
-            (B, n, 3) index of 3 nearest neighbors
+            (B, n, 3) 三个最近邻的索引
         """
         dist2, idx = _ext.three_nn(unknown, known)
         dist = torch.sqrt(dist2)
@@ -141,20 +142,21 @@ class ThreeInterpolate(Function):
     def forward(ctx, features, idx, weight):
         # type(Any, torch.Tensor, torch.Tensor, torch.Tensor) -> Torch.Tensor
         r"""
-            Performs weight linear interpolation on 3 features
-        Parameters
+        对三个特征点进行加权线性插值
+
+        参数
         ----------
         features : torch.Tensor
-            (B, c, m) Features descriptors to be interpolated from
+            (B, c, m) 需要插值的特征描述
         idx : torch.Tensor
-            (B, n, 3) three nearest neighbors of the target features in features
+            (B, n, 3) 目标点在features中的三个最近邻索引
         weight : torch.Tensor
-            (B, n, 3) weights
+            (B, n, 3) 插值权重
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, c, n) tensor of the interpolated features
+            (B, c, n) 插值后的特征
         """
         ctx.save_for_backward(idx, weight, features)
 
@@ -164,15 +166,17 @@ class ThreeInterpolate(Function):
     def backward(ctx, grad_out):
         # type: (Any, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         r"""
-        Parameters
+        反向传播
+
+        参数
         ----------
         grad_out : torch.Tensor
-            (B, c, n) tensor with gradients of ouputs
+            (B, c, n) 输出的梯度
 
-        Returns
+        返回
         -------
         grad_features : torch.Tensor
-            (B, c, m) tensor with gradients of features
+            (B, c, m) 特征的梯度
 
         None
 
@@ -196,18 +200,19 @@ class GroupingOperation(Function):
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
+        根据索引对特征进行分组
 
-        Parameters
+        参数
         ----------
         features : torch.Tensor
-            (B, C, N) tensor of features to group
+            (B, C, N) 需要分组的特征张量
         idx : torch.Tensor
-            (B, npoint, nsample) tensor containing the indicies of features to group with
+            (B, npoint, nsample) 每个分组的特征索引
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, C, npoint, nsample) tensor
+            (B, C, npoint, nsample) 分组后的特征张量
         """
         ctx.save_for_backward(idx, features)
 
@@ -217,16 +222,17 @@ class GroupingOperation(Function):
     def backward(ctx, grad_out):
         # type: (Any, torch.tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
+        反向传播
 
-        Parameters
+        参数
         ----------
         grad_out : torch.Tensor
-            (B, C, npoint, nsample) tensor of the gradients of the output from forward
+            (B, C, npoint, nsample) 前向输出的梯度
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, C, N) gradient of the features
+            (B, C, N) 特征的梯度
         None
         """
         idx, features = ctx.saved_tensors
@@ -245,22 +251,23 @@ class BallQuery(Function):
     def forward(ctx, radius, nsample, xyz, new_xyz):
         # type: (Any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
+        球查询操作，在指定半径内查找邻域点
 
-        Parameters
+        参数
         ----------
         radius : float
-            radius of the balls
+            球的半径
         nsample : int
-            maximum number of features in the balls
+            每个球内最多采样的点数
         xyz : torch.Tensor
-            (B, N, 3) xyz coordinates of the features
+            (B, N, 3) 所有点的三维坐标
         new_xyz : torch.Tensor
-            (B, npoint, 3) centers of the ball query
+            (B, npoint, 3) 球心坐标
 
-        Returns
+        返回
         -------
         torch.Tensor
-            (B, npoint, nsample) tensor with the indicies of the features that form the query balls
+            (B, npoint, nsample) 组成球查询的点的索引
         """
         output = _ext.ball_query(new_xyz, xyz, radius, nsample)
 
@@ -278,14 +285,14 @@ ball_query = BallQuery.apply
 
 class QueryAndGroup(nn.Module):
     r"""
-    Groups with a ball query of radius
+    使用球查询（ball query）方式进行分组
 
-    Parameters
+    参数
     ---------
     radius : float32
-        Radius of ball
+        球的半径
     nsample : int32
-        Maximum number of features to gather in the ball
+        每个球内最多采样的点数
     """
 
     def __init__(self, radius, nsample, use_xyz=True):
@@ -296,19 +303,19 @@ class QueryAndGroup(nn.Module):
     def forward(self, xyz, new_xyz, features=None):
         # type: (QueryAndGroup, torch.Tensor. torch.Tensor, torch.Tensor) -> Tuple[Torch.Tensor]
         r"""
-        Parameters
+        参数
         ----------
         xyz : torch.Tensor
-            xyz coordinates of the features (B, N, 3)
+            (B, N, 3) 所有点的三维坐标
         new_xyz : torch.Tensor
-            centriods (B, npoint, 3)
+            (B, npoint, 3) 球心坐标
         features : torch.Tensor
-            Descriptors of the features (B, C, N)
+            (B, C, N) 点的特征描述
 
-        Returns
+        返回
         -------
         new_features : torch.Tensor
-            (B, 3 + C, npoint, nsample) tensor
+            (B, 3 + C, npoint, nsample) 分组后的特征张量
         """
 
         idx = ball_query(self.radius, self.nsample, xyz, new_xyz)
@@ -327,7 +334,7 @@ class QueryAndGroup(nn.Module):
         else:
             assert (
                 self.use_xyz
-            ), "Cannot have not features and not use xyz as a feature!"
+            ), "不能既没有特征又不使用xyz作为特征！"
             new_features = grouped_xyz
 
         return new_features
@@ -335,9 +342,9 @@ class QueryAndGroup(nn.Module):
 
 class GroupAll(nn.Module):
     r"""
-    Groups all features
+    对所有点进行分组（全局分组）
 
-    Parameters
+    参数
     ---------
     """
 
@@ -349,19 +356,19 @@ class GroupAll(nn.Module):
     def forward(self, xyz, new_xyz, features=None):
         # type: (GroupAll, torch.Tensor, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor]
         r"""
-        Parameters
+        参数
         ----------
         xyz : torch.Tensor
-            xyz coordinates of the features (B, N, 3)
+            (B, N, 3) 所有点的三维坐标
         new_xyz : torch.Tensor
-            Ignored
+            忽略该参数
         features : torch.Tensor
-            Descriptors of the features (B, C, N)
+            (B, C, N) 点的特征描述
 
-        Returns
+        返回
         -------
         new_features : torch.Tensor
-            (B, C + 3, 1, N) tensor
+            (B, C + 3, 1, N) 分组后的特征张量
         """
 
         grouped_xyz = xyz.transpose(1, 2).unsqueeze(2)

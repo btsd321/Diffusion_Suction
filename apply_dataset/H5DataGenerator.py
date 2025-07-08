@@ -59,22 +59,22 @@ def viewpoint_to_matrix_z(towards):
 class H5DataGenerator(object):
     def __init__(self, params_file_name, target_num_point = 16384):
         '''
-        Input:
-            params_file_name: path of parameter file ("parameter.json")
-            target_num_point: target number of sampled points, default is 16384
+        输入参数:
+            params_file_name: 参数文件路径（"parameter.json"）
+            target_num_point: 采样点的目标数量，默认16384
         '''
         self.params = self._load_parameters(params_file_name)
         self.target_num_point = target_num_point
 
     def _depth_to_pointcloud_optimized(self, us, vs, zs, to_mm = False, xyz_limit=None):
         '''
-        Input:
-            us: np array of u coordinate
-            vs: np array of v coordinate
-            zs: np array of z coordinate
-            to_mm: *1000.0 if True
-            xyz_limit: None if no limit for xyz. Typical [ [xmin, xmax], [ymin, ymax], [zmin, zmax] ]
-        Output:
+        输入参数:
+            us: u坐标的np数组
+            vs: v坐标的np数组
+            zs: z坐标的np数组
+            to_mm: 若为True则*1000.0，单位转为毫米
+            xyz_limit: 若为None则xyz无限制。典型格式为[ [xmin, xmax], [ymin, ymax], [zmin, zmax] ]
+        输出:
             x, y, z
         '''
         assert len(us) == len(vs) == len(zs)
@@ -128,8 +128,10 @@ class H5DataGenerator(object):
 
     def _load_parameters(self, params_file_name):
         '''
-        Input:
-            params_file_name: path of parameter file ("parameter.json")
+        输入参数:
+            params_file_name: 参数文件路径（"parameter.json"）
+        返回:
+            params: 参数字典
         '''
         params = {}
         with open(params_file_name,'r') as f:
@@ -139,12 +141,12 @@ class H5DataGenerator(object):
 
     def _read_label_csv(self, file_name):
         '''
-        Input:
-            file_name: path of ground truth file name
-        Output:
-            label_trans: numpy array of shape (num_obj+1)*3. 0th pos is bg
-            label_rot: numpy array of shape (num_obj+1)*9. 0th pos is bg
-            label_vs: numpy array of shape (num_obj+1,). 0th pos is bg
+        输入参数:
+            file_name: 真值csv文件路径
+        输出:
+            label_trans: numpy数组，形状为(num_obj+1)*3，0号位置为背景
+            label_rot: numpy数组，形状为(num_obj+1)*9，0号位置为背景
+            label_vs: numpy数组，形状为(num_obj+1,)，0号位置为背景
         '''
         with open(file_name,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
@@ -160,6 +162,7 @@ class H5DataGenerator(object):
 
 
     def individual_label_csv(self, file_name):
+        # 读取单个物体的标签csv文件，返回float32类型的数组
         with open(file_name,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
             list_file = [i for i in all_lines]  
@@ -168,6 +171,8 @@ class H5DataGenerator(object):
 
 
     def create_mesh_cylinder(self,radius, height, R, t, collision):
+        # 创建一个圆柱体网格，并根据输入的旋转矩阵R和平移t进行变换
+        # 如果collision为True，圆柱体颜色为红色，否则为绿色
         cylinder = o3d.geometry.TriangleMesh().create_cylinder(radius, height)
         # vertices = np.asarray(cylinder.vertices)[:, [2, 1, 0]]
         vertices = np.asarray(cylinder.vertices)
@@ -203,21 +208,24 @@ class H5DataGenerator(object):
         xs = np.where(depth_img != 0)[1]
         ys = np.where(depth_img != 0)[0]
         zs = depth_img[depth_img != 0]
+        # 将深度图转换为点云
         points = self._depth_to_pointcloud_optimized(xs, ys, zs, to_mm=False, xyz_limit=xyz_limit)
+        # 获取前景点的物体ID
         obj_ids = np.round(segment_img[:,:, 1][segment_img[:,:, 2] == 1] * (obj_num - 1)).astype('int')
 
 
-       
         num_pnt = points.shape[0]
         if num_pnt == 0:
             print('No foreground points!!!!!')
             return
+        # 若点数不足目标点数，则复制补齐
         if num_pnt <= self.target_num_point:
             t = int(1.0 * self.target_num_point / num_pnt) + 1
             points_tile = np.tile(points, [t, 1])
             points = points_tile[:self.target_num_point]
             obj_ids_tile = np.tile(obj_ids, [t])
             obj_ids = obj_ids_tile[:self.target_num_point]
+        # 若点数超出目标点数，则进行最远点采样
         if num_pnt > self.target_num_point:
             points_transpose = torch.from_numpy(points.reshape(1, points.shape[0], points.shape[1])).float()
             points_transpose = points_transpose.cuda()
@@ -227,9 +235,11 @@ class H5DataGenerator(object):
  
 
 
+        # 读取单个物体的尺寸标签
         individual_object_size_lable = self.individual_label_csv(individual_object_size_path)[0]
       
 
+        # 根据采样点的物体ID，获取对应的标签
         label_trans = label_trans[obj_ids]
         label_rot = label_rot[obj_ids]
         label_id = label_id[obj_ids]
@@ -277,10 +287,9 @@ class H5DataGenerator(object):
  
         pc_o3d = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
 
-        # radius = 0.01  # 搜索半径
-        # max_nn = 30  # 邻域内用于估算法线的最大点数
-        # pc_o3d.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius, max_nn))
+        # 法线估计，使用半径搜索
         pc_o3d.estimate_normals(o3d.geometry.KDTreeSearchParamRadius(0.015), fast_normal_computation=False)
+        # 法线方向统一指向负Z轴
         pc_o3d.orient_normals_to_align_with_direction(np.array([0., 0., -1.]))# 方向是对 -1代表堆叠场景向外
         pc_o3d.normalize_normals()
         # o3d.visualization.draw_geometries([pc_o3d], window_name="法线估计",point_show_normal=True,width=800, height=600)  # 窗口高度
@@ -307,6 +316,7 @@ class H5DataGenerator(object):
 
 
 
+        # 法线可视化
         show_point_temp=o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
         show_point_temp.colors = o3d.utility.Vector3dVector([[0, 0, 1]  for i in range(points.shape[0])])
         vis_list = [  show_point_temp   ]
@@ -346,7 +356,7 @@ class H5DataGenerator(object):
         suction_points_normalization = suction_points_normalization.reshape(16384, 3)
         suction_seal_scores  = np.zeros((16384, ))
         for index in range(len(label_name)):
- 
+            # 读取每个物体的稀疏点和分数
             annotation = np.load(os.path.join(OBJ_PATH, label_name[index], "labels.npz"))
             object_sparse_point = annotation['points']
             anno_points = annotation['points']
@@ -361,7 +371,7 @@ class H5DataGenerator(object):
             anno_points_knn = torch.from_numpy(anno_points).float()
             anno_points_knn = anno_points_knn.cuda()
             
-     
+            # knn最近邻查找，获取吸取点的密封分数
             indices, dist=knn(anno_points_knn, suction_points_normalization_id_knn, k=1)
             dist=dist.cpu().numpy().reshape(dist.shape[-1])
             suction_seal_scores[obj_ids == index] = anno_scores[dist]
@@ -444,6 +454,7 @@ class H5DataGenerator(object):
   
         
 
+        # 计算吸取点的抗扭分数
         k = 15.6
         k = 30
         radius = 0.01
@@ -453,68 +464,20 @@ class H5DataGenerator(object):
             label_trans_temp = label_trans[index_temp]
             suction_or_temp = suction_or[index_temp]
             center = label_trans_temp# (3,)
-            gravity = np.array([[0, 0, 1]], dtype=np.float32) * 9.8  # 1和-1都不影响的
-            # gravity = np.array([[0, 0,  1]], dtype=np.float32) * 9.8  # (1, 3)
+            gravity = np.array([[0, 0, 1]], dtype=np.float32) * 9.8  # 重力方向
             suction_axis = viewpoint_to_matrix_z(suction_or_temp)  # (3, 3)
-            # suction_axis = viewpoint_to_matrix_x(suction_or_temp)  # (3, 3)    ????????
             suction2center = (center - suction_points_temp)[np.newaxis, :]# (1, 3)
             coord = np.matmul(suction2center, suction_axis)# (1, 3)
             gravity_proj = np.matmul(gravity, suction_axis)# (1, 3)
-            torque_y = gravity_proj[0, 0] * coord[0, 2] - gravity_proj[0, 2] * coord[0, 0]# scalar
-            torque_x = -gravity_proj[0, 1] * coord[0, 2] + gravity_proj[0, 2] * coord[0, 1]# scalar
-            torque = np.sqrt(torque_x**2 + torque_y**2)# scalar
-            score = 1 - min(1, torque / wrench_thre)# scalar
+            torque_y = gravity_proj[0, 0] * coord[0, 2] - gravity_proj[0, 2] * coord[0, 0]# 标量
+            torque_x = -gravity_proj[0, 1] * coord[0, 2] + gravity_proj[0, 2] * coord[0, 1]# 标量
+            torque = np.sqrt(torque_x**2 + torque_y**2)# 标量
+            score = 1 - min(1, torque / wrench_thre)# 标量
             suction_wrench_scores.append(score)
         suction_wrench_scores = np.array(suction_wrench_scores)
 
 
-        # show_point_temp=o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
-        # colors_temp = [[0, 0, 1]  for i in range(points.shape[0])]
-        # show_point_temp.colors = o3d.utility.Vector3dVector(colors_temp)
-        # vis_list = [  show_point_temp   ]
-        # # 
-        # for idx in range(len(suction_points[0:1024])):
-        #     suction_point = suction_points[idx]
-        #     suction_score = suction_wrench_scores[idx]
-        #     ball = o3d.geometry.TriangleMesh.create_sphere(0.001).translate(suction_point)
-        #     ball_v = np.asarray(ball.vertices)
-        #     ball_colors = np.zeros((ball_v.shape[0], 3), dtype=np.float32)
-        #     ball_colors[:, 0] = suction_score
-        #     # ball_colors[:, 2] = suction_score
-        #     ball.vertex_colors = o3d.utility.Vector3dVector(ball_colors)
-        #     vis_list.append(ball)
-        
-        # # 
-        # for idx in range(len(suction_points[0:200])):
-        #     suction_point = suction_points[idx]
-        #     anno_normal = suction_or[idx]
-        #     suction_score = suction_wrench_scores[idx]
-        #     n = anno_normal
-        #     new_z = n
-        #     new_y = np.array((new_z[1], -new_z[0], 0), dtype=np.float64)
-        #     new_y = new_y / np.linalg.norm(new_y)
-        #     new_x = np.cross(new_y, new_z)
-        #     new_x = new_x / np.linalg.norm(new_x)
-        #     new_x = np.expand_dims(new_x, axis=1)
-        #     new_y = np.expand_dims(new_y, axis=1)
-        #     new_z = np.expand_dims(new_z, axis=1)  
-        #     rot_matrix = np.concatenate((new_x, new_y, new_z), axis=-1)
-        #     ball = self.create_mesh_cylinder(radius=0.005, height=0.05, R=rot_matrix, t=suction_point, collision=suction_score)
-        #     vis_list.append(ball)
-        
-        # o3d.visualization.draw_geometries(vis_list, width=800,   height=600)
-      
-        # import matplotlib.pyplot as plt
-        # plt.hist(suction_wrench_scores, bins=100)
-        # plt.title("Histogram of Data")
-        # plt.xlabel("Value")
-        # plt.ylabel("Frequency")
-        # plt.show()
-
-
-
-
-        # 感觉应该根据吸盘来定,suctionnet  height = 0.1     radius = 0.01
+        # 计算吸取点的可行性分数
         height = 0.1
         radius = 0.01
         scence_point = points
@@ -524,12 +487,6 @@ class H5DataGenerator(object):
             grasp_poses = viewpoint_to_matrix_x(suction_or_temp)
             target = scence_point-suction_points_temp
             target = np.matmul(target, grasp_poses)
-            
-    
-            # frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
-            # org_trans_workspace_target =  o3d.geometry.PointCloud(o3d.utility.Vector3dVector(target))
-            # o3d.visualization.draw_geometries( [ org_trans_workspace_target  ,frame  ], width=800,   height=600)
-     
             target_yz = target[:, 1:3]
             target_r = np.linalg.norm(target_yz, axis=-1)
             mask1 = target_r < radius
@@ -539,39 +496,7 @@ class H5DataGenerator(object):
         suction_feasibility_scores = ~np.array(suction_feasibility_scores)
 
 
-        # show_point_temp=o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
-        # colors_temp = [[0, 0, 1]  for i in range(points.shape[0])]
-        # show_point_temp.colors = o3d.utility.Vector3dVector(colors_temp)
-        # vis_list = [  show_point_temp   ]
-        # # 
-        # for idx in range(len(suction_points[0:100])):
-        #     suction_point = suction_points[idx]
-        #     anno_normal = suction_or[idx]
-        #     suction_score = suction_feasibility_scores[idx]
-        #     n = anno_normal
-        #     new_z = n
-        #     new_y = np.array((new_z[1], -new_z[0], 0), dtype=np.float64)
-        #     new_y = new_y / np.linalg.norm(new_y)
-        #     new_x = np.cross(new_y, new_z)
-        #     new_x = new_x / np.linalg.norm(new_x)
-        #     new_x = np.expand_dims(new_x, axis=1)
-        #     new_y = np.expand_dims(new_y, axis=1)
-        #     new_z = np.expand_dims(new_z, axis=1)
-        #     rot_matrix = np.concatenate((new_x, new_y, new_z), axis=-1)
-        #     ball = self.create_mesh_cylinder(radius=0.005, height=0.05, R=rot_matrix, t=suction_point, collision=suction_score)
-        #     vis_list.append(ball)
-        # o3d.visualization.draw_geometries(vis_list, width=800,   height=600)
-   
-        # import matplotlib.pyplot as plt
-        # plt.hist(suction_feasibility_scores.astype(int), bins=100)
-        # plt.title("Histogram of Data")
-        # plt.xlabel("Value")
-        # plt.ylabel("Frequency")
-        # plt.show()
-
- 
-
-
+        # 综合所有分数，得到最终分数并排序
         score_all = suction_seal_scores * suction_wrench_scores
         score_all = suction_seal_scores * suction_wrench_scores* suction_feasibility_scores*individual_object_size_lable
 
@@ -623,8 +548,8 @@ class H5DataGenerator(object):
             f['suction_wrench_scores'] = suction_wrench_scores
             f['suction_feasibility_scores'] = suction_feasibility_scores
             f['individual_object_size_lable'] = individual_object_size_lable
-            
-            
+
+
 
 
 

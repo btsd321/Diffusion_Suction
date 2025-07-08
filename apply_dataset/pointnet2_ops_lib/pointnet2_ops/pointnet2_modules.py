@@ -7,6 +7,7 @@ from pointnet2_ops import pointnet2_utils
 
 
 def build_shared_mlp(mlp_spec: List[int], bn: bool = True):
+    # 构建共享的多层感知机（MLP），可选是否使用批归一化
     layers = []
     for i in range(1, len(mlp_spec)):
         layers.append(
@@ -30,19 +31,19 @@ class _PointnetSAModuleBase(nn.Module):
         self, xyz: torch.Tensor, features: Optional[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""
-        Parameters
+        参数说明
         ----------
         xyz : torch.Tensor
-            (B, N, 3) tensor of the xyz coordinates of the features
+            (B, N, 3) 代表特征点的三维坐标
         features : torch.Tensor
-            (B, C, N) tensor of the descriptors of the the features
+            (B, C, N) 代表特征点的特征描述
 
-        Returns
+        返回值
         -------
         new_xyz : torch.Tensor
-            (B, npoint, 3) tensor of the new features' xyz
+            (B, npoint, 3) 新采样点的三维坐标
         new_features : torch.Tensor
-            (B,  \sum_k(mlps[k][-1]), npoint) tensor of the new_features descriptors
+            (B,  \sum_k(mlps[k][-1]), npoint) 新采样点的特征描述
         """
 
         new_features_list = []
@@ -61,13 +62,13 @@ class _PointnetSAModuleBase(nn.Module):
         for i in range(len(self.groupers)):
             new_features = self.groupers[i](
                 xyz, new_xyz, features
-            )  # (B, C, npoint, nsample)
+            )  # (B, C, npoint, nsample) 分组后的特征
 
-            new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)
+            new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample) 经过MLP处理
             new_features = F.max_pool2d(
                 new_features, kernel_size=[1, new_features.size(3)]
-            )  # (B, mlp[-1], npoint, 1)
-            new_features = new_features.squeeze(-1)  # (B, mlp[-1], npoint)
+            )  # (B, mlp[-1], npoint, 1) 在每个分组内做最大池化
+            new_features = new_features.squeeze(-1)  # (B, mlp[-1], npoint) 去掉最后一维
 
             new_features_list.append(new_features)
 
@@ -75,20 +76,20 @@ class _PointnetSAModuleBase(nn.Module):
 
 
 class PointnetSAModuleMSG(_PointnetSAModuleBase):
-    r"""Pointnet set abstrction layer with multiscale grouping
+    r"""PointNet多尺度分组的集合抽象层
 
-    Parameters
+    参数说明
     ----------
     npoint : int
-        Number of features
+        采样点数量
     radii : list of float32
-        list of radii to group with
+        每个分组的半径列表
     nsamples : list of int32
-        Number of samples in each ball query
+        每个球查询的采样点数
     mlps : list of list of int32
-        Spec of the pointnet before the global max_pool for each scale
+        每个尺度下MLP的结构
     bn : bool
-        Use batchnorm
+        是否使用批归一化
     """
 
     def __init__(self, npoint, radii, nsamples, mlps, bn=True, use_xyz=True):
@@ -116,20 +117,20 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
 
 
 class PointnetSAModule(PointnetSAModuleMSG):
-    r"""Pointnet set abstrction layer
+    r"""PointNet集合抽象层（单尺度分组）
 
-    Parameters
+    参数说明
     ----------
     npoint : int
-        Number of features
+        采样点数量
     radius : float
-        Radius of ball
+        球查询半径
     nsample : int
-        Number of samples in the ball query
+        球查询内采样点数
     mlp : list
-        Spec of the pointnet before the global max_pool
+        MLP结构
     bn : bool
-        Use batchnorm
+        是否使用批归一化
     """
 
     def __init__(
@@ -147,14 +148,14 @@ class PointnetSAModule(PointnetSAModuleMSG):
 
 
 class PointnetFPModule(nn.Module):
-    r"""Propigates the features of one set to another
+    r"""特征传播模块，将已知点集的特征传播到未知点集
 
-    Parameters
+    参数说明
     ----------
     mlp : list
-        Pointnet module parameters
+        PointNet模块参数
     bn : bool
-        Use batchnorm
+        是否使用批归一化
     """
 
     def __init__(self, mlp, bn=True):
@@ -165,21 +166,21 @@ class PointnetFPModule(nn.Module):
     def forward(self, unknown, known, unknow_feats, known_feats):
         # type: (PointnetFPModule, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
-        Parameters
+        参数说明
         ----------
         unknown : torch.Tensor
-            (B, n, 3) tensor of the xyz positions of the unknown features
+            (B, n, 3) 未知点的三维坐标
         known : torch.Tensor
-            (B, m, 3) tensor of the xyz positions of the known features
+            (B, m, 3) 已知点的三维坐标
         unknow_feats : torch.Tensor
-            (B, C1, n) tensor of the features to be propigated to
+            (B, C1, n) 需要传播特征的未知点特征
         known_feats : torch.Tensor
-            (B, C2, m) tensor of features to be propigated
+            (B, C2, m) 需要传播的已知点特征
 
-        Returns
+        返回值
         -------
         new_features : torch.Tensor
-            (B, mlp[-1], n) tensor of the features of the unknown features
+            (B, mlp[-1], n) 未知点的新特征
         """
 
         if known is not None:
@@ -199,7 +200,7 @@ class PointnetFPModule(nn.Module):
         if unknow_feats is not None:
             new_features = torch.cat(
                 [interpolated_feats, unknow_feats], dim=1
-            )  # (B, C2 + C1, n)
+            )  # (B, C2 + C1, n) 拼接特征
         else:
             new_features = interpolated_feats
 

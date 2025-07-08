@@ -4,7 +4,6 @@
 @author: Huang Dingtao
 @checked: Huang Dingtao
 
-
 """
 
 import sys
@@ -15,9 +14,6 @@ print(CYCLE_idx_list )
 print("SCENE_idx_list")
 print(SCENE_idx_list )
 
-
-
-
 import os
 
 FILE_PATH = os.path.abspath(__file__)
@@ -26,8 +22,6 @@ FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
 
 # # w10 可视化时候需要多加一句
 # FILE_DIR = os.path.dirname(FILE_DIR)
-
-
 
 import bpy
 import csv
@@ -54,16 +48,16 @@ if not os.path.exists(OUTDIR_dir_rgb_images):
 
 class BlenderRenderClass:
     def __init__(self, ):
-        # *****Blender Setup camera*****"
-        resolution = [1920, 1200]
-        focal_length = 16.0
-        sensor_size =  [11.25, 7.03]
-        cam_location_x_y_z = [0, 0, 1.70]
+        # *****Blender 相机参数设置*****
+        resolution = [1920, 1200]  # 渲染分辨率
+        focal_length = 16.0        # 相机焦距，单位mm
+        sensor_size =  [11.25, 7.03]  # 相机传感器尺寸，单位mm
+        cam_location_x_y_z = [0, 0, 1.70]  # 相机在三维空间的位置
         # cam_rotation_qw_qx_qy_qz = [0, -0.70710678, -0.70710678, 0] # [90. ,  0. ,180.]
         cam_rotation_qw_qx_qy_qz = [0.000000e+00 ,0.000000e+00 ,1.000000e+00 ,6.123234e-17]  # [0. ,  0. ,180.]
         
-        depth_graph_divide =  2
-        depth_graph_less = 3
+        depth_graph_divide =  2    # 深度图缩放因子
+        depth_graph_less = 3       # 深度图阈值
 
         self.CAMERA_RESOLUTION = resolution
         self.CAMERA_FOCAL_LEN = focal_length
@@ -72,34 +66,34 @@ class BlenderRenderClass:
         self.CAMERA_ROTATION = cam_rotation_qw_qx_qy_qz
         self.DEPTH_DIVIDE = depth_graph_divide
         self.DEPTH_LESS = depth_graph_less
-        # *****Blender Setup camera*****"
+        # *****Blender 相机参数设置*****
         unit_of_obj='mm'
         if unit_of_obj == 'mm':
-            self.meshScale = [0.001, 0.001, 0.001]  # mm -> m
+            self.meshScale = [0.001, 0.001, 0.001]  # 毫米转米
         elif unit_of_obj == 'm':
             self.meshScale = [1, 1, 1]
 
     def camera_set(self):
-        # difine the engine kind
+        # 设置渲染引擎为CYCLES
         bpy.data.scenes["Scene"].render.engine = "CYCLES"
 
-        # define the camera Internal parameter
+        # 设置相机内参
         bpy.data.scenes["Scene"].render.resolution_x = self.CAMERA_RESOLUTION[0]
         bpy.data.scenes["Scene"].render.resolution_y = self.CAMERA_RESOLUTION[1]
 
         bpy.data.scenes["Scene"].render.resolution_percentage = 100
 
-        # write the camera focal legth and sensor size. unit is mm
+        # 设置相机焦距和传感器尺寸，单位为毫米
         bpy.data.cameras["Camera"].type = "PERSP"
         bpy.data.cameras["Camera"].lens = self.CAMERA_FOCAL_LEN
         bpy.data.cameras["Camera"].lens_unit = "MILLIMETERS"
         bpy.data.cameras["Camera"].sensor_width = self.CAMERA_SENSOR_SIZE[0]
         bpy.data.cameras["Camera"].sensor_height = self.CAMERA_SENSOR_SIZE[1]
         
-        # Fitting method of sensor internal image and field of view angle: horizontal – suitable for sensor width.
+        # 传感器适配方式为宽度适配
         bpy.data.cameras["Camera"].sensor_fit = "HORIZONTAL"
         
-        # Horizontal aspect ratio - used for deformed or non square pixel output
+        # 设置像素长宽比
         bpy.data.scenes["Scene"].render.pixel_aspect_x = 1.0
    
         bpy.data.scenes["Scene"].render.pixel_aspect_y = self.CAMERA_SENSOR_SIZE[1] * self.CAMERA_RESOLUTION[0] / \
@@ -116,14 +110,13 @@ class BlenderRenderClass:
                                                           self.CAMERA_ROTATION[1],
                                                           self.CAMERA_ROTATION[2],
                                                           self.CAMERA_ROTATION[3]]
-        # let the camera coordinate rotate 180 degree around X axis
+        # 让相机坐标系绕X轴旋转180度
         bpy.data.objects["Camera"].rotation_mode = 'XYZ'
         bpy.data.objects["Camera"].rotation_euler[0] = bpy.data.objects["Camera"].rotation_euler[0] + math.pi
 
-
         # 清除现有的灯光对象
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.ops.object.select_by_type(type='LAMP')  # 修正类型为 'LAMP'
+        bpy.ops.object.select_by_type(type='LAMP')  # 选择所有灯光对象
         bpy.ops.object.delete()
 
         # 创建平行光（Sun Light）
@@ -145,27 +138,25 @@ class BlenderRenderClass:
             point_light.data.energy = 10  # 设置光源强度
             
     def read_csv(self, csv_path):      
+        # 读取csv文件，返回物体名称、位姿、索引
         with open(csv_path,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
-            list_file = [i for i in all_lines]  #[ ["Type", "Index", "x", "y", "z", "w", "i", "j", "k",'Layer'] ,[], []  ]
-            # list_file = [row for row in all_lines if any(row)]  #[ ["Type", "Index", "x", "y", "z", "w", "i", "j", "k",'Layer'] ,[], []  ]
-            
+            list_file = [i for i in all_lines]  # 读取所有行
         array_file = np.array(list_file)[1:]
         obj_name = array_file[:,0]
         obj_index = array_file[:,1].astype('int')
         pose = array_file[:,2:9].astype('float32')
         return obj_name, pose, obj_index
 
-
-
     def import_obj(self, obj_name, pose, instance_index):
+        # 导入指定物体到Blender场景中，并设置其位姿
         for o in bpy.data.objects:
             if o.type == 'MESH':
                 o.select = True
             else:
                 o.select = False
         bpy.ops.object.delete()
-        # delete the objects in scene at the beginning
+        # 删除场景中所有网格对象
     
         for instance_index_ in instance_index:
             file_path = os.path.join(OBJ_PATH, obj_name[instance_index_] ,'object.obj')
@@ -179,12 +170,11 @@ class BlenderRenderClass:
             instance.rotation_mode = 'QUATERNION'
             instance.rotation_quaternion = [pose[instance_index_][3], pose[instance_index_][4], pose[instance_index_][5], pose[instance_index_][6]]
 
-
     def grb_graph(self, rgb_scene_path):
-        # edit the node compositing to use node
+        # 使用节点合成系统输出RGB图像
         bpy.data.scenes["Scene"].use_nodes = 1
 
-        # define the compositing node
+        # 定义合成节点
         scene = bpy.context.scene
         nodes = scene.node_tree.nodes
         links = scene.node_tree.links
@@ -199,13 +189,12 @@ class BlenderRenderClass:
         render_layers = nodes.new("CompositorNodeRLayers")
         links.new(render_layers.outputs['Image'], output_file_rgb.inputs['Image'])
 
-
-    # Use the node to configure the depth map and split map 
+    # 使用节点配置深度图和分割图的输出
     def depth_graph(self, depth_path, segment_path):
-        # edit the node compositing to use node
+        # 启用节点合成功能
         bpy.data.scenes["Scene"].use_nodes = 1
 
-        # define the compositing node
+        # 定义合成节点
         scene = bpy.context.scene
         nodes = scene.node_tree.nodes
         links = scene.node_tree.links
@@ -222,9 +211,7 @@ class BlenderRenderClass:
         multiply = nodes.new("CompositorNodeMath")
         multiply.operation = "MULTIPLY"
 
-
-
-        # one output is for depth, the other is for label
+        # 一个输出用于深度图，另一个用于标签图
         output_file_depth = nodes.new("CompositorNodeOutputFile")
         output_file_depth.base_path = depth_path
         output_file_depth.format.file_format = "PNG"
@@ -251,7 +238,7 @@ class BlenderRenderClass:
         links.new(divide.outputs[0], viewer.inputs['Image'])
         links.new(render_layers.outputs['Image'], output_file_label.inputs['Image'])
 
-    # define the materials(such as color) of the object, and make the objects point at the same materials
+    # 定义物体的材质（如颜色），并让所有物体指向同一个材质
     def label_graph(self, label_number):
 
         # 遍历场景中的所有物体
@@ -269,13 +256,13 @@ class BlenderRenderClass:
             mymat = bpy.data.materials.new('mymat')
             mymat.use_nodes = True
 
-        # delete the initial nodes
+        # 删除初始节点
         nodes = mymat.node_tree.nodes
         links = mymat.node_tree.links
         for node in nodes:
             nodes.remove(node)
 
-        # change the color of ColorRamp
+        # 配置颜色渐变节点
         ColorRamp = nodes.new(type="ShaderNodeValToRGB")
         ColorRamp.color_ramp.interpolation = 'LINEAR'
         ColorRamp.color_ramp.color_mode = 'RGB'
@@ -283,7 +270,7 @@ class BlenderRenderClass:
         ColorRamp.color_ramp.elements[0].color[:3] = [1.0, 0.0, 0.0]
         ColorRamp.color_ramp.elements[1].color[:3] = [1.0, 1.0, 0.0]
 
-        # add the stop button according to the number of objeccts
+        # 根据物体数量添加分段
         ObjectInfo = nodes.new(type="ShaderNodeObjectInfo")
         OutputMat = nodes.new(type="ShaderNodeOutputMaterial")
         Emission = nodes.new(type="ShaderNodeEmission")
@@ -297,7 +284,7 @@ class BlenderRenderClass:
         links.new(ColorRamp.outputs[0], Emission.inputs[0])
         links.new(Emission.outputs[0], OutputMat.inputs[0])
 
-        # let the obj document point at the same materials
+        # 让所有网格对象都使用同一个材质
         objects = bpy.data.objects
         count = 0
         for obj in objects:
@@ -306,22 +293,16 @@ class BlenderRenderClass:
                 if not 'mymat' in obj.data.materials:
                     obj.data.materials.append(mymat)
 
-
-
-
-
     def render_scenes(self):
         times = []     
         for cycle_id in CYCLE_idx_list:
             for scene_id in SCENE_idx_list:
                 start_time = time.time()  # 记录起始时间戳
                 self.camera_set()
-                # get the name list and pose numpy array(x, y, z, qw, qx, qy, qz)
+                # 获取物体名称列表和位姿数组(x, y, z, qw, qx, qy, qz)
         
                 csv_path = os.path.join(OUTDIR_physics_result_dir, 'cycle_{:0>4}'.format(cycle_id),"{:0>3}".format(scene_id), "{:0>3}.csv".format(scene_id))
                 obj_name, pose, segment_index = self.read_csv(csv_path)
-                # print(obj_name)  # array(['Num1', 'Num1'],dtype='<U20') 
-                # print(pose)  #[[ 0.14687355  0.18479148  0.02647368  0.70635259  0.68928874  0.158188750.0303875 ][ 0.0748543   0.21340428  0.02648409  0.70603818  0.2569916   0.65876436 -0.03866476]]
 
                 self.import_obj(obj_name, pose, segment_index)
 
