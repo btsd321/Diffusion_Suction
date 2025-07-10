@@ -17,7 +17,7 @@ import pytorch_utils as pt_utils
 import pointnet2_utils
 
 if False:
-    # Workaround for type hints without depending on the `typing` module
+    # 为了类型提示而不引入typing依赖
     from typing import *
 
 
@@ -29,23 +29,25 @@ class _PointnetSAModuleBase(nn.Module):
         self.mlps = None
 
     def forward(self, xyz, features=None):
-        # type: (_PointnetSAModuleBase, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
-        r"""
-        Parameters
-        ----------
-        xyz : torch.Tensor
-            (B, N, 3) tensor of the xyz coordinates of the features
-        features : torch.Tensor
-            (B, N, C) tensor of the descriptors of the the features
-
-        Returns
-        -------
-        new_xyz : torch.Tensor
-            (B, npoint, 3) tensor of the new features' xyz
-        new_features : torch.Tensor
-            (B,  \sum_k(mlps[k][-1]), npoint) tensor of the new_features descriptors
         """
+        点集抽象模块的前向传播
 
+        参数:
+            xyz : torch.Tensor
+                (B, N, 3) 输入点的空间坐标
+            features : torch.Tensor
+                (B, N, C) 输入点的特征（可选）
+
+        返回:
+            new_xyz : torch.Tensor
+                (B, npoint, 3) 采样后的点的空间坐标
+            new_features : torch.Tensor
+                (B, 所有尺度输出通道之和, npoint) 采样后的点的特征
+        详细说明：
+            1. 先对输入点云进行最远点采样，得到采样点new_xyz。
+            2. 对每个尺度分别进行分组和特征聚合（球查询+MLP+池化）。
+            3. 多尺度特征拼接输出。
+        """
         new_features_list = []
 
         xyz_flipped = xyz.transpose(1, 2).contiguous()
@@ -60,11 +62,14 @@ class _PointnetSAModuleBase(nn.Module):
         )
 
         for i in range(len(self.groupers)):
+            # 分组操作，得到每个采样点邻域的特征
             new_features = self.groupers[i](
                 xyz, new_xyz, features
             )  # (B, C, npoint, nsample)
 
+            # 通过MLP提取局部特征
             new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)
+            # 对邻域特征做最大池化，得到每个采样点的局部描述
             new_features = F.max_pool2d(
                 new_features, kernel_size=[1, new_features.size(3)]
             )  # (B, mlp[-1], npoint, 1)
@@ -72,28 +77,31 @@ class _PointnetSAModuleBase(nn.Module):
 
             new_features_list.append(new_features)
 
+        # 多尺度特征拼接
         return new_xyz, torch.cat(new_features_list, dim=1)
 
 
 class PointnetSAModuleMSG(_PointnetSAModuleBase):
-    r"""Pointnet set abstrction layer with multiscale grouping
+    r"""
+    PointNet++多尺度分组（MSG）点集抽象层
 
-    Parameters
+    参数说明
     ----------
     npoint : int
-        Number of features
+        采样点数
     radii : list of float32
-        list of radii to group with
+        每个尺度的球查询半径
     nsamples : list of int32
-        Number of samples in each ball query
+        每个尺度的邻域采样点数
     mlps : list of list of int32
-        Spec of the pointnet before the global max_pool for each scale
+        每个尺度的MLP结构
     bn : bool
-        Use batchnorm
+        是否使用BatchNorm
+    use_xyz : bool
+        是否将xyz坐标拼接到特征中
     """
 
     def __init__(self, npoint, radii, nsamples, mlps, bn=True, use_xyz=True):
-        # type: (PointnetSAModuleMSG, int, List[float], List[int], List[List[int]], bool, bool) -> None
         super(PointnetSAModuleMSG, self).__init__()
 
         assert len(radii) == len(nsamples) == len(mlps)
@@ -104,6 +112,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
         for i in range(len(radii)):
             radius = radii[i]
             nsample = nsamples[i]
+            # 构建每个尺度的分组器（球查询）
             self.groupers.append(
                 pointnet2_utils.QueryAndGroup(radius, nsample, use_xyz=use_xyz)
                 if npoint is not None
@@ -111,32 +120,35 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
             )
             mlp_spec = mlps[i]
             if use_xyz:
-                mlp_spec[0] += 3
+                mlp_spec[0] += 3  # 输入特征拼接xyz
 
+            # 构建每个尺度的MLP
             self.mlps.append(pt_utils.SharedMLP(mlp_spec, bn=bn))
 
 
 class PointnetSAModule(PointnetSAModuleMSG):
-    r"""Pointnet set abstrction layer
+    r"""
+    PointNet++单尺度分组（SSG）点集抽象层
 
-    Parameters
+    参数说明
     ----------
     npoint : int
-        Number of features
+        采样点数
     radius : float
-        Radius of ball
+        球查询半径
     nsample : int
-        Number of samples in the ball query
+        邻域采样点数
     mlp : list
-        Spec of the pointnet before the global max_pool
+        MLP结构
     bn : bool
-        Use batchnorm
+        是否使用BatchNorm
+    use_xyz : bool
+        是否将xyz坐标拼接到特征中
     """
 
     def __init__(
         self, mlp, npoint=None, radius=None, nsample=None, bn=True, use_xyz=True
     ):
-        # type: (PointnetSAModule, List[int], int, float, int, bool, bool) -> None
         super(PointnetSAModule, self).__init__(
             mlps=[mlp],
             npoint=npoint,
@@ -148,42 +160,45 @@ class PointnetSAModule(PointnetSAModuleMSG):
 
 
 class PointnetFPModule(nn.Module):
-    r"""Propigates the features of one set to another
+    r"""
+    特征传播（Feature Propagation）模块，用于特征插值和融合
 
-    Parameters
+    参数说明
     ----------
     mlp : list
-        Pointnet module parameters
+        MLP结构
     bn : bool
-        Use batchnorm
+        是否使用BatchNorm
     """
 
     def __init__(self, mlp, bn=True):
-        # type: (PointnetFPModule, List[int], bool) -> None
         super(PointnetFPModule, self).__init__()
         self.mlp = pt_utils.SharedMLP(mlp, bn=bn)
 
     def forward(self, unknown, known, unknow_feats, known_feats):
-        # type: (PointnetFPModule, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor) -> torch.Tensor
-        r"""
-        Parameters
-        ----------
-        unknown : torch.Tensor
-            (B, n, 3) tensor of the xyz positions of the unknown features
-        known : torch.Tensor
-            (B, m, 3) tensor of the xyz positions of the known features
-        unknow_feats : torch.Tensor
-            (B, C1, n) tensor of the features to be propigated to
-        known_feats : torch.Tensor
-            (B, C2, m) tensor of features to be propigated
-
-        Returns
-        -------
-        new_features : torch.Tensor
-            (B, mlp[-1], n) tensor of the features of the unknown features
         """
+        特征传播模块前向传播
 
+        参数:
+            unknown : torch.Tensor
+                (B, n, 3) 目标点的空间坐标（需要插值的点）
+            known : torch.Tensor
+                (B, m, 3) 已知点的空间坐标（有特征的点）
+            unknow_feats : torch.Tensor
+                (B, C1, n) 目标点的特征（可选，来自上一级FP）
+            known_feats : torch.Tensor
+                (B, C2, m) 已知点的特征
+
+        返回:
+            new_features : torch.Tensor
+                (B, mlp[-1], n) 插值融合后的特征
+        详细说明：
+            1. 若known不为None，则对known_feats做三线性插值，获得unknown点的特征。
+            2. 若unknow_feats不为None，则与插值特征拼接。
+            3. 拼接后通过MLP提升特征表达能力。
+        """
         if known is not None:
+            # 三近邻查找与插值
             dist, idx = pointnet2_utils.three_nn(unknown, known)
             dist_recip = 1.0 / (dist + 1e-8)
             norm = torch.sum(dist_recip, dim=2, keepdim=True)
@@ -193,11 +208,13 @@ class PointnetFPModule(nn.Module):
                 known_feats, idx, weight
             )
         else:
+            # 若无已知点，则直接扩展特征
             interpolated_feats = known_feats.expand(
                 *(known_feats.size()[0:2] + [unknown.size(1)])
             )
 
         if unknow_feats is not None:
+            # 拼接上一级FP特征
             new_features = torch.cat(
                 [interpolated_feats, unknow_feats], dim=1
             )  # (B, C2 + C1, n)
@@ -218,18 +235,20 @@ if __name__ == "__main__":
     xyz = Variable(torch.randn(2, 9, 3).cuda(), requires_grad=True)
     xyz_feats = Variable(torch.randn(2, 9, 6).cuda(), requires_grad=True)
 
+    # 测试MSG模块
     test_module = PointnetSAModuleMSG(
         npoint=2, radii=[5.0, 10.0], nsamples=[6, 3], mlps=[[9, 3], [9, 6]]
     )
     test_module.cuda()
     print(test_module(xyz, xyz_feats))
 
-    #  test_module = PointnetFPModule(mlp=[6, 6])
-    #  test_module.cuda()
-    #  from torch.autograd import gradcheck
-    #  inputs = (xyz, xyz, None, xyz_feats)
-    #  test = gradcheck(test_module, inputs, eps=1e-6, atol=1e-4)
-    #  print(test)
+    # # 测试FP模块
+    # test_module = PointnetFPModule(mlp=[6, 6])
+    # test_module.cuda()
+    # from torch.autograd import gradcheck
+    # inputs = (xyz, xyz, None, xyz_feats)
+    # test = gradcheck(test_module, inputs, eps=1e-6, atol=1e-4)
+    # print(test)
 
     for _ in range(1):
         _, new_features = test_module(xyz, xyz_feats)

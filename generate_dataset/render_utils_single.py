@@ -6,8 +6,8 @@
 
 """
 import sys
-CYCLE_idx_list = [sys.argv[4]]
-SCENE_idx_list = [sys.argv[5]]
+CYCLE_idx_list = [sys.argv[4]]  # 从命令行参数获取当前循环编号
+SCENE_idx_list = [sys.argv[5]]  # 从命令行参数获取当前场景编号
 print("CYCLE_idx_list")
 print(CYCLE_idx_list )
 print("SCENE_idx_list")
@@ -16,7 +16,7 @@ print(SCENE_idx_list)
 import logging
 
 logger = logging.getLogger("bpy")
-logger.setLevel(logging.WARNING)  # 可以选择 WARNING 或 ERROR
+logger.setLevel(logging.WARNING)  # 设置Blender日志等级为WARNING或ERROR，减少输出
 
 import os
 import sys
@@ -111,7 +111,7 @@ class BlenderRenderClass:
                                                           self.CAMERA_ROTATION[1],
                                                           self.CAMERA_ROTATION[2],
                                                           self.CAMERA_ROTATION[3]]
-        # 让相机坐标系绕X轴旋转180度
+        # 让相机坐标系绕X轴旋转180度，适配Blender坐标系
         bpy.data.objects["Camera"].rotation_mode = 'XYZ'
         bpy.data.objects["Camera"].rotation_euler[0] = bpy.data.objects["Camera"].rotation_euler[0] + math.pi
 
@@ -134,8 +134,7 @@ class BlenderRenderClass:
                 o.select = True
             else:
                 o.select = False
-        bpy.ops.object.delete()
-        # 删除场景中所有网格对象
+        bpy.ops.object.delete()  # 删除场景中所有网格对象
 
         for instance_index_ in instance_index:
             file_path = os.path.join(OBJ_PATH, obj_name[instance_index_] ,'object.obj')
@@ -144,7 +143,7 @@ class BlenderRenderClass:
             print(bpy.context.selected_objects)
             print(instance_index_)
             instance.pass_index = instance_index_
-            instance.scale = [0.001, 0.001, 0.001]
+            instance.scale = [0.001, 0.001, 0.001]  # 设置缩放（毫米转米）
             instance.location = [pose[instance_index_][0], pose[instance_index_][1], pose[instance_index_][2]]
             instance.rotation_mode = 'QUATERNION'
             instance.rotation_quaternion = [pose[instance_index_][3], pose[instance_index_][4], pose[instance_index_][5], pose[instance_index_][6]]
@@ -200,8 +199,8 @@ class BlenderRenderClass:
         ColorRamp.color_ramp.interpolation = 'LINEAR'
         ColorRamp.color_ramp.color_mode = 'RGB'
 
-        ColorRamp.color_ramp.elements[0].color[:3] = [1.0, 0.0, 0.0]
-        ColorRamp.color_ramp.elements[1].color[:3] = [1.0, 1.0, 0.0]
+        ColorRamp.color_ramp.elements[0].color[:3] = [1.0, 0.0, 0.0]  # 红色
+        ColorRamp.color_ramp.elements[1].color[:3] = [1.0, 1.0, 0.0]  # 黄色
 
         # 根据物体数量添加分段
         ObjectInfo = nodes.new(type="ShaderNodeObjectInfo")
@@ -231,7 +230,7 @@ class BlenderRenderClass:
 
             for scene_id in SCENE_idx_list:
                 print( 'cycle_id={}'.format(cycle_id)+'scene_id={}'.format(scene_id))
-                self.camera_set()
+                self.camera_set()  # 设置相机参数
                 
                 csv_path = os.path.join(OUTDIR_physics_result_dir, 'cycle_{:0>4}'.format(cycle_id),"{:0>3}".format(scene_id), "{:0>3}.csv".format(scene_id))
                 obj_names, pose, segment_indexs = self.read_csv(csv_path)
@@ -239,7 +238,7 @@ class BlenderRenderClass:
                 for i in segment_indexs:
                     obj_name = []
                     obj_name.append(obj_names[i])
-                    self.import_obj(obj_names, pose, [i])
+                    self.import_obj(obj_names, pose, [i])  # 只导入当前物体
 
                     segment_scene_path = os.path.join(OUTDIR_dir_segment_images, 'cycle_{:0>4}'.format(cycle_id),"{:0>3}".format(scene_id),"{:0>3}".format(scene_id)+"_{:0>3}".format(i))
                     depth_scene_path = segment_scene_path # 实际未用到
@@ -248,10 +247,10 @@ class BlenderRenderClass:
                     if not os.path.exists(segment_scene_path):
                         os.makedirs(segment_scene_path)
                     
-                    self.depth_graph(depth_scene_path, segment_scene_path)
+                    self.depth_graph(depth_scene_path, segment_scene_path)  # 配置节点输出
                     # 只渲染rgb图，速度较快
                     self.label_graph(len(obj_name) - 1)
-                    bpy.ops.render.render()
+                    bpy.ops.render.render()  # 执行渲染
 
 if __name__ == '__main__':
     import time
