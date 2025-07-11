@@ -1,9 +1,8 @@
 # -*- coding:utf-8 -*-
 """
-
+本文件用于在Blender中批量渲染三维场景, 自动导入物体模型、设置相机与光源参数, 并输出RGB图像、深度图和分割标签图。适用于数据集的自动生成与仿真渲染流程。
 @author: Huang Dingtao
 @checked: Huang Dingtao
-
 """
 
 import sys

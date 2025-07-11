@@ -1,9 +1,10 @@
 # -*- coding:utf-8 -*-
 """
+本脚本用于计算每个场景中每个物体的单独面积比例, 并将结果保存为csv文件。
+
 @author: Huang Dingtao
 @checked: Huang Dingtao
 
-本脚本用于计算每个场景中每个物体的单独面积比例, 并将结果保存为csv文件。
 """
 
 import os

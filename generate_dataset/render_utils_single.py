@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 """
+本文件用于在Blender中对单个物体进行批量渲染, 自动导入物体模型、设置相机参数, 并输出分割标签图。适用于数据集单物体分割标签的自动生成与渲染流程。
 
 @author: Huang Dingtao
 @checked: Huang Dingtao

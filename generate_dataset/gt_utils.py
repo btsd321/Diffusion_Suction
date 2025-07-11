@@ -1,4 +1,6 @@
 """
+本文件用于批量读取物理仿真结果csv, 计算物体在相机坐标系下的位姿, 并生成GT(Ground Truth)标注文件, 适用于数据集标注自动生成流程。
+
 作者: Huang Dingtao
 校验: Huang Dingtao
 """
