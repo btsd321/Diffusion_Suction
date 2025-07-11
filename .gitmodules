@@ -1,0 +1,3 @@
+[submodule "thirdparty/pointnet2"]
+	path = thirdparty/pointnet2
+	url = https://github.com/btsd321/pointnet2.git
