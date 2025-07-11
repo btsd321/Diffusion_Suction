@@ -1,10 +1,3 @@
-from __future__ import (
-    division,
-    absolute_import,
-    with_statement,
-    print_function,
-    unicode_literals,
-)
 import os
 import sys
 FILE_DIR = os.path.dirname(os.path.abspath(__file__))
