@@ -9,9 +9,16 @@
 
 import os
 import sys
-FILE_PATH = os.path.abspath(__file__)
-FILE_DIR_generate_dataset = os.path.dirname(FILE_PATH)
-FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
+import argparse
+
+# 命令行参数解析
+parser = argparse.ArgumentParser()
+# 数据集根目录
+parser.add_argument('--data_dir', type=str, default='/home/lixinlong/Project/pose_detect_train/Data/Diffusion_Suction_DataSet', help='数据集根目录')
+FLAGS = parser.parse_args()
+
+# 获取数据集根目录
+FILE_DIR = FLAGS.data_dir
 
 import csv
 import json

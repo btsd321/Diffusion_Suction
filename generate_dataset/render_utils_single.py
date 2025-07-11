@@ -21,9 +21,16 @@ logger.setLevel(logging.WARNING)  # 设置Blender日志等级为WARNING或ERROR,
 
 import os
 import sys
-FILE_PATH = os.path.abspath(__file__)
-FILE_DIR_generate_dataset = os.path.dirname(FILE_PATH)
-FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
+import argparse
+
+# 命令行参数解析
+parser = argparse.ArgumentParser()
+# 数据集根目录
+parser.add_argument('--data_dir', type=str, default='/home/lixinlong/Project/pose_detect_train/Data/Diffusion_Suction_DataSet', help='数据集根目录')
+FLAGS = parser.parse_args()
+
+# 获取数据集根目录
+FILE_DIR = FLAGS.data_dir
 
 # w10 可视化时候需要多加一句
 # FILE_DIR = os.path.dirname(FILE_DIR)
@@ -42,10 +49,8 @@ import csv
 
 OBJ_PATH =  os.path.join(FILE_DIR, 'OBJ')
 OUTDIR_physics_result_dir =  os.path.join(FILE_DIR, 'physics_result')
-
-OBJ_PATH =  os.path.join(FILE_DIR, 'OBJ')
-
 OUTDIR_dir_segment_images =  os.path.join(FILE_DIR, 'segment_images_sigle')
+
 if not os.path.exists(OUTDIR_dir_segment_images):
     os.makedirs(OUTDIR_dir_segment_images)
 

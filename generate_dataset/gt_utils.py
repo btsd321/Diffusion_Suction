@@ -7,9 +7,24 @@
 
 import os
 import sys
-FILE_PATH = os.path.abspath(__file__)
-FILE_DIR_generate_dataset = os.path.dirname(FILE_PATH)
-FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
+import argparse
+
+# 命令行参数解析
+parser = argparse.ArgumentParser()
+# 数据集根目录
+parser.add_argument('--data_dir', type=str, default='/home/lixinlong/Project/pose_detect_train/Data/Diffusion_Suction_DataSet', help='数据集根目录')
+# 循环次数
+parser.add_argument('--cycle_num', type=int, default=100, help='循环次数')
+# 场景数量
+parser.add_argument('--scene_num', type=int, default=50, help='场景数量')
+FLAGS = parser.parse_args()
+
+# 获取数据集根目录
+FILE_DIR = FLAGS.data_dir
+# 获取循环次数
+CYCLE_NUM = FLAGS.cycle_num
+# 获取场景数量
+SCENE_NUM = FLAGS.scene_num
 
 import csv
 import cv2
@@ -21,8 +36,8 @@ import nibabel.quaternions as nq
 import yaml
 
 # 定义循环和场景的索引范围
-CYCLE_idx_list = range(0, 100)    # 100个循环
-SCENE_idx_list = range(1, 51)     # 每个循环50个场景
+CYCLE_idx_list = range(0, CYCLE_NUM)    # 100个循环
+SCENE_idx_list = range(1, SCENE_NUM + 1)     # 每个循环50个场景
 
 # 相机的空间位置和旋转(四元数)
 CAMERA_LOCATION = [0, 0, 1.70]

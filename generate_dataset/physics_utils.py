@@ -12,12 +12,19 @@ SCENE_idx_list = range(1, 51)   # 每个循环50个场景
 
 import os
 import sys
-FILE_PATH = os.path.abspath(__file__)
-FILE_DIR_generate_dataset = os.path.dirname(FILE_PATH)
-FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
+import argparse
+
+# 命令行参数解析
+parser = argparse.ArgumentParser()
+# 数据集根目录
+parser.add_argument('--data_dir', type=str, default='/home/lixinlong/Project/pose_detect_train/Data/Diffusion_Suction_DataSet', help='数据集根目录')
+FLAGS = parser.parse_args()
+
+# 获取数据集根目录
+FILE_DIR = FLAGS.data_dir
 
 # OBJ文件夹路径及物体名称列表(部分物体被排除)
-OBJ_folder_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "OBJ")
+OBJ_folder_path = os.path.join(FILE_DIR, "OBJ")
 OBJ_files_and_dirs = os.listdir(OBJ_folder_path)
 OBJ_name = [str(i) for i in range(0, 113)]
 OBJ_name.remove("112")
