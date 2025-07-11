@@ -36,7 +36,7 @@ class _PointnetSAModuleBase(nn.Module):
             xyz : torch.Tensor
                 (B, N, 3) 输入点的空间坐标
             features : torch.Tensor
-                (B, N, C) 输入点的特征（可选）
+                (B, N, C) 输入点的特征(可选)
 
         返回:
             new_xyz : torch.Tensor
@@ -44,8 +44,8 @@ class _PointnetSAModuleBase(nn.Module):
             new_features : torch.Tensor
                 (B, 所有尺度输出通道之和, npoint) 采样后的点的特征
         详细说明：
-            1. 先对输入点云进行最远点采样，得到采样点new_xyz。
-            2. 对每个尺度分别进行分组和特征聚合（球查询+MLP+池化）。
+            1. 先对输入点云进行最远点采样, 得到采样点new_xyz。
+            2. 对每个尺度分别进行分组和特征聚合(球查询+MLP+池化)。
             3. 多尺度特征拼接输出。
         """
         new_features_list = []
@@ -62,14 +62,14 @@ class _PointnetSAModuleBase(nn.Module):
         )
 
         for i in range(len(self.groupers)):
-            # 分组操作，得到每个采样点邻域的特征
+            # 分组操作, 得到每个采样点邻域的特征
             new_features = self.groupers[i](
                 xyz, new_xyz, features
             )  # (B, C, npoint, nsample)
 
             # 通过MLP提取局部特征
             new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)
-            # 对邻域特征做最大池化，得到每个采样点的局部描述
+            # 对邻域特征做最大池化, 得到每个采样点的局部描述
             new_features = F.max_pool2d(
                 new_features, kernel_size=[1, new_features.size(3)]
             )  # (B, mlp[-1], npoint, 1)
@@ -83,7 +83,7 @@ class _PointnetSAModuleBase(nn.Module):
 
 class PointnetSAModuleMSG(_PointnetSAModuleBase):
     r"""
-    PointNet++多尺度分组（MSG）点集抽象层
+    PointNet++多尺度分组(MSG)点集抽象层
 
     参数说明
     ----------
@@ -112,7 +112,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
         for i in range(len(radii)):
             radius = radii[i]
             nsample = nsamples[i]
-            # 构建每个尺度的分组器（球查询）
+            # 构建每个尺度的分组器(球查询)
             self.groupers.append(
                 pointnet2_utils.QueryAndGroup(radius, nsample, use_xyz=use_xyz)
                 if npoint is not None
@@ -128,7 +128,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
 
 class PointnetSAModule(PointnetSAModuleMSG):
     r"""
-    PointNet++单尺度分组（SSG）点集抽象层
+    PointNet++单尺度分组(SSG)点集抽象层
 
     参数说明
     ----------
@@ -161,7 +161,7 @@ class PointnetSAModule(PointnetSAModuleMSG):
 
 class PointnetFPModule(nn.Module):
     r"""
-    特征传播（Feature Propagation）模块，用于特征插值和融合
+    特征传播(Feature Propagation)模块, 用于特征插值和融合
 
     参数说明
     ----------
@@ -181,11 +181,11 @@ class PointnetFPModule(nn.Module):
 
         参数:
             unknown : torch.Tensor
-                (B, n, 3) 目标点的空间坐标（需要插值的点）
+                (B, n, 3) 目标点的空间坐标(需要插值的点)
             known : torch.Tensor
-                (B, m, 3) 已知点的空间坐标（有特征的点）
+                (B, m, 3) 已知点的空间坐标(有特征的点)
             unknow_feats : torch.Tensor
-                (B, C1, n) 目标点的特征（可选，来自上一级FP）
+                (B, C1, n) 目标点的特征(可选, 来自上一级FP)
             known_feats : torch.Tensor
                 (B, C2, m) 已知点的特征
 
@@ -193,8 +193,8 @@ class PointnetFPModule(nn.Module):
             new_features : torch.Tensor
                 (B, mlp[-1], n) 插值融合后的特征
         详细说明：
-            1. 若known不为None，则对known_feats做三线性插值，获得unknown点的特征。
-            2. 若unknow_feats不为None，则与插值特征拼接。
+            1. 若known不为None, 则对known_feats做三线性插值, 获得unknown点的特征。
+            2. 若unknow_feats不为None, 则与插值特征拼接。
             3. 拼接后通过MLP提升特征表达能力。
         """
         if known is not None:
@@ -208,7 +208,7 @@ class PointnetFPModule(nn.Module):
                 known_feats, idx, weight
             )
         else:
-            # 若无已知点，则直接扩展特征
+            # 若无已知点, 则直接扩展特征
             interpolated_feats = known_feats.expand(
                 *(known_feats.size()[0:2] + [unknown.size(1)])
             )

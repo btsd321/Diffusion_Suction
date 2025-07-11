@@ -3,7 +3,7 @@
 @author: Huang Dingtao
 @checked: Huang Dingtao
 
-本脚本用于批量生成物理仿真场景，随机投放多个物体到箱体中，并保存每个物体的最终位姿到csv文件。
+本脚本用于批量生成物理仿真场景, 随机投放多个物体到箱体中, 并保存每个物体的最终位姿到csv文件。
 """
 
 CYCLE_idx_list = range(0, 100)  # 100个循环
@@ -15,7 +15,7 @@ FILE_PATH = os.path.abspath(__file__)
 FILE_DIR_generate_dataset = os.path.dirname(FILE_PATH)
 FILE_DIR = os.path.dirname(FILE_DIR_generate_dataset)
 
-# OBJ文件夹路径及物体名称列表（部分物体被排除）
+# OBJ文件夹路径及物体名称列表(部分物体被排除)
 OBJ_folder_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "OBJ")
 OBJ_files_and_dirs = os.listdir(OBJ_folder_path)
 OBJ_name = [str(i) for i in range(0, 113)]
@@ -53,20 +53,20 @@ import random
 
 class GenerateSimulationResult:
     def __init__(self):
-        # meshScale用于控制物体模型的单位，默认为毫米转米
+        # meshScale用于控制物体模型的单位, 默认为毫米转米
         unit_of_obj = 'mm'
         if unit_of_obj == 'mm':
             self.meshScale = [0.001, 0.001, 0.001]  # 毫米转米
         elif unit_of_obj == 'm':
             self.meshScale = [1, 1, 1]
 
-        # 设置箱体尺寸：宽800mm，长600mm，高500mm，厚度50mm
+        # 设置箱体尺寸：宽800mm, 长600mm, 高500mm, 厚度50mm
         self.box_width  = 0.8
         self.box_length = 0.6
         self.box_thickness = 0.05
         self.box_height =  0.50
         
-        # 是否显示GUI界面，1为显示，0为不显示
+        # 是否显示GUI界面, 1为显示, 0为不显示
         self.show_GUI = 0
         # 随机投放物体的位置范围[x_min, y_min, z_min, z_max, box底部厚度]
         self.random_range = [0.1, 0.1, 0.13, 0.15]
@@ -74,7 +74,7 @@ class GenerateSimulationResult:
         self.random_range.append(self.box_bottom_thickness)
 
     def scene_init(self):
-        # 初始化仿真场景，包括物理引擎、地面、重力等
+        # 初始化仿真场景, 包括物理引擎、地面、重力等
         if self.show_GUI:
             _ = pybullet.connect(pybullet.GUI) 
         else:
@@ -126,7 +126,7 @@ class GenerateSimulationResult:
                 useMaximalCoordinates=False))
             pybullet.changeVisualShape(multi_body[-1], -1, rgbaColor=[1, 0, 0, 1])
             pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)
-        # 进行若干步仿真，使物体稳定
+        # 进行若干步仿真, 使物体稳定
         for _ in range(160):
             pybullet.stepSimulation()
             time.sleep(1. / 240)
@@ -153,7 +153,7 @@ class GenerateSimulationResult:
                 cube_ind_3 = pybullet.loadURDF(os.path.join(os.path.join(FILE_DIR, 'BOX'), 'cube2.urdf'), (self.box_width*0.5+self.box_thickness*0.5, 0, self.box_height/2), pybullet.getQuaternionFromEuler([0, 0, 0]), useFixedBase=1)
                 cube_ind_4 = pybullet.loadURDF(os.path.join(os.path.join(FILE_DIR, 'BOX'), 'cube2.urdf'), (-self.box_width*0.5-self.box_thickness*0.5, -0, self.box_height/2), pybullet.getQuaternionFromEuler([0, 0, 0]), useFixedBase=1)
                 
-                # 加载物体，检查是否有物体超出箱体，如果有则重新投放
+                # 加载物体, 检查是否有物体超出箱体, 如果有则重新投放
                 while (1):
                     flag = 0
                     multi_body_objects_first_layer, name_list = self.random_drop_objects_single(self.meshScale, scene_id)
@@ -187,7 +187,7 @@ class GenerateSimulationResult:
         # 保存当前循环和场景的仿真结果到csv文件
         headers = ["Type", "Index", "x", "y", "z", "w", "i", "j", "k"]
         rows = []
-        # 让仿真再运行720步，确保物体完全静止
+        # 让仿真再运行720步, 确保物体完全静止
         for _ in range(720):
             pybullet.stepSimulation()
         for i, mb in enumerate(multi_body_list):

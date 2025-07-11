@@ -11,13 +11,13 @@ from collections import OrderedDict
 
 def set_bn_momentum_default(bn_momentum):
     """
-    返回一个函数，用于设置BN层的动量。
+    返回一个函数, 用于设置BN层的动量。
 
     参数:
         bn_momentum: BN层的动量值
 
     返回:
-        fn: 可用于nn.Module.apply的函数，设置BN层动量
+        fn: 可用于nn.Module.apply的函数, 设置BN层动量
     """
     def fn(m):
         if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
@@ -30,9 +30,9 @@ class BNMomentumScheduler(object):
 
     参数:
         model: 需要调整BN动量的模型
-        bn_lambda: 动量变化函数，输入epoch返回动量
+        bn_lambda: 动量变化函数, 输入epoch返回动量
         last_epoch: 上一次的epoch编号
-        setter: 设置动量的函数，默认为set_bn_momentum_default
+        setter: 设置动量的函数, 默认为set_bn_momentum_default
     """
     def __init__(
             self, model, bn_lambda, last_epoch=-1,
@@ -55,7 +55,7 @@ class BNMomentumScheduler(object):
         调整BN层动量。
 
         参数:
-            epoch: 当前epoch编号（可选）
+            epoch: 当前epoch编号(可选)
         """
         if epoch is None:
             epoch = self.last_epoch + 1
@@ -84,7 +84,7 @@ class OptimizerLRScheduler(object):
 
     参数:
         optimizer: 优化器对象
-        lr_lambda: 学习率变化函数，输入epoch返回学习率
+        lr_lambda: 学习率变化函数, 输入epoch返回学习率
         last_epoch: 上一次的epoch编号
     """
     def __init__(self, optimizer, lr_lambda, last_epoch=-1):
@@ -104,7 +104,7 @@ class OptimizerLRScheduler(object):
         调整优化器的学习率。
 
         参数:
-            epoch: 当前epoch编号（可选）
+            epoch: 当前epoch编号(可选)
         """
         if epoch is None:
             epoch = self.last_epoch + 1
@@ -128,11 +128,11 @@ class SimpleLogger():
 
     参数:
         log_dir: 日志保存目录
-        file_path: 训练脚本路径（用于备份）
+        file_path: 训练脚本路径(用于备份)
     """
     def __init__(self, log_dir, file_path):
         if os.path.exists(log_dir):
-            # 如果目录已存在，可根据需要决定是否报错
+            # 如果目录已存在, 可根据需要决定是否报错
             pass
         else:
             os.makedirs(log_dir)
@@ -159,7 +159,7 @@ class SimpleLogger():
         重置状态统计字典。
 
         参数:
-            *args: 需要统计的指标名称（字符串）
+            *args: 需要统计的指标名称(字符串)
         """
         self.cnt = 0
         self.state_dict = OrderedDict()
@@ -184,9 +184,9 @@ class SimpleLogger():
         打印当前统计的平均指标。
 
         参数:
-            log: 是否写入日志文件（否则仅打印）
+            log: 是否写入日志文件(否则仅打印)
             one_line: 是否一行输出所有指标
-            line_len: 每行输出的指标数（可选）
+            line_len: 每行输出的指标数(可选)
         """
         log_fn = self.log_string if log==True else print
         out_str = ''
@@ -204,9 +204,9 @@ class SimpleLogger():
         返回当前统计的平均指标字典。
 
         参数:
-            log: 是否写入日志文件（无实际作用，仅接口一致）
-            one_line: 是否一行输出（无实际作用，仅接口一致）
-            line_len: 每行输出的指标数（无实际作用，仅接口一致）
+            log: 是否写入日志文件(无实际作用, 仅接口一致)
+            one_line: 是否一行输出(无实际作用, 仅接口一致)
+            line_len: 每行输出的指标数(无实际作用, 仅接口一致)
 
         返回:
             xx: 平均指标的有序字典

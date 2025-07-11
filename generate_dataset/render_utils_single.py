@@ -16,7 +16,7 @@ print(SCENE_idx_list)
 import logging
 
 logger = logging.getLogger("bpy")
-logger.setLevel(logging.WARNING)  # 设置Blender日志等级为WARNING或ERROR，减少输出
+logger.setLevel(logging.WARNING)  # 设置Blender日志等级为WARNING或ERROR, 减少输出
 
 import os
 import sys
@@ -52,8 +52,8 @@ class BlenderRenderClass:
     def __init__(self, ):
         # *****Blender 相机参数设置*****
         resolution = [1920, 1200]  # 渲染分辨率
-        focal_length = 16.0        # 相机焦距，单位mm
-        sensor_size =  [11.25, 7.03]  # 相机传感器尺寸，单位mm
+        focal_length = 16.0        # 相机焦距, 单位mm
+        sensor_size =  [11.25, 7.03]  # 相机传感器尺寸, 单位mm
         cam_location_x_y_z = [0, 0, 1.70]  # 相机在三维空间的位置
         cam_rotation_qw_qx_qy_qz =  [0.000000e+00 ,0.000000e+00 ,1.000000e+00 ,6.123234e-17]  # 相机四元数旋转
         depth_graph_divide =  2    # 深度图缩放因子
@@ -84,7 +84,7 @@ class BlenderRenderClass:
 
         bpy.data.scenes["Scene"].render.resolution_percentage = 100
 
-        # 设置相机焦距和传感器尺寸，单位为毫米
+        # 设置相机焦距和传感器尺寸, 单位为毫米
         bpy.data.cameras["Camera"].type = "PERSP"
         bpy.data.cameras["Camera"].lens = self.CAMERA_FOCAL_LEN
         bpy.data.cameras["Camera"].lens_unit = "MILLIMETERS"
@@ -111,12 +111,12 @@ class BlenderRenderClass:
                                                           self.CAMERA_ROTATION[1],
                                                           self.CAMERA_ROTATION[2],
                                                           self.CAMERA_ROTATION[3]]
-        # 让相机坐标系绕X轴旋转180度，适配Blender坐标系
+        # 让相机坐标系绕X轴旋转180度, 适配Blender坐标系
         bpy.data.objects["Camera"].rotation_mode = 'XYZ'
         bpy.data.objects["Camera"].rotation_euler[0] = bpy.data.objects["Camera"].rotation_euler[0] + math.pi
 
     def read_csv(self, csv_path):      
-        # 读取csv文件，返回物体名称、位姿、索引
+        # 读取csv文件, 返回物体名称、位姿、索引
         with open(csv_path,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
             # 过滤空行
@@ -128,7 +128,7 @@ class BlenderRenderClass:
         return obj_name, pose, obj_index
 
     def import_obj(self, obj_name, pose, instance_index):
-        # 导入指定物体到Blender场景中，并设置其位姿
+        # 导入指定物体到Blender场景中, 并设置其位姿
         for o in bpy.data.objects:
             if o.type == 'MESH':
                 o.select = True
@@ -143,7 +143,7 @@ class BlenderRenderClass:
             print(bpy.context.selected_objects)
             print(instance_index_)
             instance.pass_index = instance_index_
-            instance.scale = [0.001, 0.001, 0.001]  # 设置缩放（毫米转米）
+            instance.scale = [0.001, 0.001, 0.001]  # 设置缩放(毫米转米)
             instance.location = [pose[instance_index_][0], pose[instance_index_][1], pose[instance_index_][2]]
             instance.rotation_mode = 'QUATERNION'
             instance.rotation_quaternion = [pose[instance_index_][3], pose[instance_index_][4], pose[instance_index_][5], pose[instance_index_][6]]
@@ -162,7 +162,7 @@ class BlenderRenderClass:
 
         render_layers = nodes.new("CompositorNodeRLayers")
 
-        # 输出分割图（OPEN_EXR格式，32位RGB）
+        # 输出分割图(OPEN_EXR格式, 32位RGB)
         output_file_label = nodes.new("CompositorNodeOutputFile")
         output_file_label.base_path = segment_path
         output_file_label.format.file_format = "OPEN_EXR"
@@ -172,7 +172,7 @@ class BlenderRenderClass:
         # 连接渲染输出到分割图输出节点
         links.new(render_layers.outputs['Image'], output_file_label.inputs['Image'])
 
-    # 定义物体的材质（如颜色），并让所有物体指向同一个材质
+    # 定义物体的材质(如颜色), 并让所有物体指向同一个材质
     def label_graph(self, label_number):
         # 遍历场景中的所有物体
         for obj in bpy.context.scene.objects:
@@ -248,7 +248,7 @@ class BlenderRenderClass:
                         os.makedirs(segment_scene_path)
                     
                     self.depth_graph(depth_scene_path, segment_scene_path)  # 配置节点输出
-                    # 只渲染rgb图，速度较快
+                    # 只渲染rgb图, 速度较快
                     self.label_graph(len(obj_name) - 1)
                     bpy.ops.render.render()  # 执行渲染
 

@@ -38,14 +38,14 @@ git clone https://github.com/TAO-TAO-TAO-TAO-TAO/Diffusion_Suction.git
 
 - 安装 [Pytorch](https://pytorch.org/get-started/locally/)。本项目需使用 GPU，代码在 Ubuntu 16.04/18.04、CUDA 10.0 和 cuDNN v7.4、python3.6 下测试通过。
 - 主干网络 PointNet++ 源自 [pointnet2](https://github.com/erikwijmans/Pointnet2_PyTorch)。
-- 编译 PointNet++ 的 CUDA 层（用于主干网络）：
+- 编译 PointNet++ 的 CUDA 层(用于主干网络)：
 
     ```bash
     cd train\Sparepart\train.py
     python train.py install
     ```
 
-- 安装以下 Python 依赖（使用 `pip install`）：
+- 安装以下 Python 依赖(使用 `pip install`)：
 
     ```bash
     matplotlib

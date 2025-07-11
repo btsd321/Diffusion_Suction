@@ -81,7 +81,7 @@ BN_LAMBDA = lambda epoch: max(BN_MOMENTUM_INIT * BN_DECAY_RATE**(int(epoch / BN_
 
 def generate_list(start, end, step):
     """
-    生成cycle区间列表，每个元素为[start, end)的区间
+    生成cycle区间列表, 每个元素为[start, end)的区间
     """
     result = []
     for i in range(start, end, step):
@@ -162,7 +162,7 @@ train_dataset = None
 
 def train_one_epoch(loader, epoch):
     """
-    单轮训练过程。遍历训练集，前向、反向传播并统计损失。
+    单轮训练过程。遍历训练集, 前向、反向传播并统计损失。
 
     参数:
         loader: 训练数据加载器
@@ -241,7 +241,7 @@ def train_one_epoch(loader, epoch):
 
 def eval_one_epoch(loader, epoch):
     """
-    单轮验证过程。遍历验证集，统计损失。
+    单轮验证过程。遍历验证集, 统计损失。
 
     参数:
         loader: 验证数据加载器
@@ -298,7 +298,7 @@ def eval_one_epoch(loader, epoch):
 
 def train(start_epoch):
     """
-    训练主循环。每个epoch动态加载训练集，训练并定期验证与保存模型。
+    训练主循环。每个epoch动态加载训练集, 训练并定期验证与保存模型。
 
     参数:
         start_epoch: 训练起始epoch编号

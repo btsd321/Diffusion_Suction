@@ -52,10 +52,10 @@ def viewpoint_to_matrix_z(towards):
 class H5DataGenerator(object):
     def __init__(self, params_file_name, target_num_point = 16384):
         '''
-        初始化数据生成器，加载相机参数
+        初始化数据生成器, 加载相机参数
         输入参数:
-            params_file_name: 参数文件路径（"parameter.json"）
-            target_num_point: 采样点的目标数量，默认16384
+            params_file_name: 参数文件路径("parameter.json")
+            target_num_point: 采样点的目标数量, 默认16384
         '''
         self.params = self._load_parameters(params_file_name)
         self.target_num_point = target_num_point
@@ -67,7 +67,7 @@ class H5DataGenerator(object):
             us: u坐标的np数组
             vs: v坐标的np数组
             zs: z坐标的np数组
-            to_mm: 若为True则*1000.0，单位转为毫米
+            to_mm: 若为True则*1000.0, 单位转为毫米
             xyz_limit: 若为None则xyz无限制。典型格式为[ [xmin, xmax], [ymin, ymax], [zmin, zmax] ]
         输出:
             x, y, z
@@ -123,7 +123,7 @@ class H5DataGenerator(object):
         '''
         加载相机参数文件
         输入参数:
-            params_file_name: 参数文件路径（"parameter.json"）
+            params_file_name: 参数文件路径("parameter.json")
         返回:
             params: 参数字典
         '''
@@ -135,13 +135,13 @@ class H5DataGenerator(object):
 
     def _read_label_csv(self, file_name):
         '''
-        读取场景标签csv，返回平移、旋转、id、名称
+        读取场景标签csv, 返回平移、旋转、id、名称
         输入参数:
             file_name: 真值csv文件路径
         输出:
-            label_trans: numpy数组，形状为(num_obj+1)*3，0号位置为背景
-            label_rot: numpy数组，形状为(num_obj+1)*9，0号位置为背景
-            label_vs: numpy数组，形状为(num_obj+1,)，0号位置为背景
+            label_trans: numpy数组, 形状为(num_obj+1)*3, 0号位置为背景
+            label_rot: numpy数组, 形状为(num_obj+1)*9, 0号位置为背景
+            label_vs: numpy数组, 形状为(num_obj+1,), 0号位置为背景
         '''
         with open(file_name,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
@@ -155,7 +155,7 @@ class H5DataGenerator(object):
         return label_trans, label_rot,label_id,label_name
 
     def individual_label_csv(self, file_name):
-        # 读取单个物体的标签csv文件，返回float32类型的数组
+        # 读取单个物体的标签csv文件, 返回float32类型的数组
         with open(file_name,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
             list_file = [i for i in all_lines]  
@@ -163,21 +163,21 @@ class H5DataGenerator(object):
         return array_file
 
     def create_mesh_cylinder(self,radius, height, R, t, collision):
-        # 创建一个圆柱体网格，并根据输入的旋转矩阵R和平移t进行变换
-        # 如果collision为True，圆柱体颜色为红色，否则为绿色
+        # 创建一个圆柱体网格, 并根据输入的旋转矩阵R和平移t进行变换
+        # 如果collision为True, 圆柱体颜色为红色, 否则为绿色
         cylinder = o3d.geometry.TriangleMesh().create_cylinder(radius, height)
         vertices = np.asarray(cylinder.vertices)
         vertices[:, 2] += height / 2
         vertices = np.dot(R, vertices.T).T + t
         cylinder.vertices = o3d.utility.Vector3dVector(vertices)
-        # 颜色编码，collision为1时红色，否则为0
+        # 颜色编码, collision为1时红色, 否则为0
         ball_colors = np.zeros((vertices.shape[0], 3), dtype=np.float32)
         ball_colors[:, 0] = collision
         cylinder.vertex_colors = o3d.utility.Vector3dVector(ball_colors)
         return cylinder
 
     def process_train_set(self,depth_img, segment_img, gt_file_path, output_file_path,individual_object_size_path,xyz_limit=None):
-        # 处理单个训练样本，生成点云、法线、吸取分数等并保存为h5
+        # 处理单个训练样本, 生成点云、法线、吸取分数等并保存为h5
         start_time = time.time()    # 程序开始时间
 
         assert depth_img.shape == (self.params['resolutionY'], self.params['resolutionX']) and depth_img.dtype == np.uint16
@@ -196,14 +196,14 @@ class H5DataGenerator(object):
         if num_pnt == 0:
             print('No foreground points!!!!!')
             return
-        # 若点数不足目标点数，则复制补齐
+        # 若点数不足目标点数, 则复制补齐
         if num_pnt <= self.target_num_point:
             t = int(1.0 * self.target_num_point / num_pnt) + 1
             points_tile = np.tile(points, [t, 1])
             points = points_tile[:self.target_num_point]
             obj_ids_tile = np.tile(obj_ids, [t])
             obj_ids = obj_ids_tile[:self.target_num_point]
-        # 若点数超出目标点数，则进行最远点采样
+        # 若点数超出目标点数, 则进行最远点采样
         if num_pnt > self.target_num_point:
             points_transpose = torch.from_numpy(points.reshape(1, points.shape[0], points.shape[1])).float()
             points_transpose = points_transpose.cuda()
@@ -213,7 +213,7 @@ class H5DataGenerator(object):
 
         # 读取单个物体的尺寸标签
         individual_object_size_lable = self.individual_label_csv(individual_object_size_path)[0]
-        # 根据采样点的物体ID，获取对应的标签
+        # 根据采样点的物体ID, 获取对应的标签
         label_trans = label_trans[obj_ids]
         label_rot = label_rot[obj_ids]
         label_id = label_id[obj_ids]
@@ -221,7 +221,7 @@ class H5DataGenerator(object):
 
         # 构建点云对象
         pc_o3d = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
-        # 法线估计，使用半径搜索
+        # 法线估计, 使用半径搜索
         pc_o3d.estimate_normals(o3d.geometry.KDTreeSearchParamRadius(0.015), fast_normal_computation=False)
         # 法线方向统一指向负Z轴
         pc_o3d.orient_normals_to_align_with_direction(np.array([0., 0., -1.]))
@@ -279,7 +279,7 @@ class H5DataGenerator(object):
             suction_points_normalization_id_knn = suction_points_normalization_id_knn.cuda()
             anno_points_knn = torch.from_numpy(anno_points).float()
             anno_points_knn = anno_points_knn.cuda()
-            # knn最近邻查找，获取吸取点的密封分数
+            # knn最近邻查找, 获取吸取点的密封分数
             indices, dist=knn(anno_points_knn, suction_points_normalization_id_knn, k=1)
             dist=dist.cpu().numpy().reshape(dist.shape[-1])
             suction_seal_scores[obj_ids == index] = anno_scores[dist]
@@ -324,7 +324,7 @@ class H5DataGenerator(object):
         plt.ylabel("Frequency")
         plt.show()
 
-        # 计算吸取点的抗扭分数（考虑重力和吸盘姿态）
+        # 计算吸取点的抗扭分数(考虑重力和吸盘姿态)
         k = 30
         radius = 0.01
         wrench_thre = k * radius * np.pi * np.sqrt(2)
@@ -345,7 +345,7 @@ class H5DataGenerator(object):
             suction_wrench_scores.append(score)
         suction_wrench_scores = np.array(suction_wrench_scores)
 
-        # 计算吸取点的可行性分数（碰撞检测）
+        # 计算吸取点的可行性分数(碰撞检测)
         height = 0.1
         radius = 0.01
         scence_point = points
@@ -363,7 +363,7 @@ class H5DataGenerator(object):
             suction_feasibility_scores.append(mask)
         suction_feasibility_scores = ~np.array(suction_feasibility_scores)
 
-        # 综合所有分数，得到最终分数并排序
+        # 综合所有分数, 得到最终分数并排序
         score_all = suction_seal_scores * suction_wrench_scores
         score_all = suction_seal_scores * suction_wrench_scores* suction_feasibility_scores*individual_object_size_lable
         sorted_indices = np.argsort(score_all)[::-1]

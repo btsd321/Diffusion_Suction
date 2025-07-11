@@ -32,17 +32,17 @@ if not os.path.exists( TRAIN_SET_DIR_Change ):
 
 def checke_angles_degrees(normals,score):
     """
-    根据法向量与参考向量（0,0,-1）之间的夹角，对分数进行加权调整。
+    根据法向量与参考向量(0,0,-1)之间的夹角, 对分数进行加权调整。
 
     参数:
-        normals: 法向量数组，形状为(N, 3)
+        normals: 法向量数组, 形状为(N, 3)
         score: 原始分数数组
 
     返回:
         score: 加权调整后的分数数组
     """
 
-    reference_vector = np.array([0, 0, -1])  # 参考向量，指向负Z轴
+    reference_vector = np.array([0, 0, -1])  # 参考向量, 指向负Z轴
 
     dot_products = np.sum(normals * reference_vector, axis=1)  # 计算法向量与参考向量的点积
 
@@ -51,13 +51,13 @@ def checke_angles_degrees(normals,score):
 
     cos_angles = dot_products / (norm_magnitudes * reference_magnitude)  # 计算夹角的余弦值
 
-    cos_angles = np.clip(cos_angles, -1.0, 1.0)  # 防止数值溢出，限制在[-1, 1]范围内
+    cos_angles = np.clip(cos_angles, -1.0, 1.0)  # 防止数值溢出, 限制在[-1, 1]范围内
 
-    angles = np.arccos(cos_angles)  # 计算夹角（弧度）
+    angles = np.arccos(cos_angles)  # 计算夹角(弧度)
 
     angles_degrees = np.degrees(angles)  # 转换为角度
 
-    mapped_values = 1 - (angles_degrees / 180)  # 将角度映射到[0,1]区间，角度越小值越大
+    mapped_values = 1 - (angles_degrees / 180)  # 将角度映射到[0,1]区间, 角度越小值越大
 
     score *= mapped_values  # 用映射值对原分数加权
     return score

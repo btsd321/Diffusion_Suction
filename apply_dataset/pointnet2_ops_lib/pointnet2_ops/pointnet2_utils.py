@@ -4,7 +4,7 @@ import warnings
 from torch.autograd import Function
 from typing import *
 
-# 优先尝试导入C++/CUDA扩展模块，如果失败则JIT编译
+# 优先尝试导入C++/CUDA扩展模块, 如果失败则JIT编译
 try:
     import pointnet2_ops._ext as _ext
 except ImportError:
@@ -13,7 +13,7 @@ except ImportError:
     import os.path as osp
     import os
 
-    warnings.warn("无法直接加载pointnet2_ops的C++扩展，正在JIT编译。")
+    warnings.warn("无法直接加载pointnet2_ops的C++扩展, 正在JIT编译。")
 
     _ext_src_root = osp.join(osp.dirname(__file__), "_ext-src")
     _ext_sources = glob.glob(osp.join(_ext_src_root, "src", "*.cpp")) + glob.glob(
@@ -32,13 +32,13 @@ except ImportError:
     )
 
 # ===========================
-# 1. 最远点采样（Furthest Point Sampling）
+# 1. 最远点采样(Furthest Point Sampling)
 # ===========================
 class FurthestPointSampling(Function):
     @staticmethod
     def forward(ctx, xyz, npoint):
         """
-        使用迭代的最远点采样方法，选择一组具有最大最小距离的npoint个特征点
+        使用迭代的最远点采样方法, 选择一组具有最大最小距离的npoint个特征点
         xyz: (B, N, 3) 输入点云
         npoint: int 采样点数
         返回: (B, npoint) 采样点的索引
@@ -49,13 +49,13 @@ class FurthestPointSampling(Function):
 
     @staticmethod
     def backward(ctx, grad_out):
-        # 采样操作不可微，直接返回空
+        # 采样操作不可微, 直接返回空
         return ()
 
 furthest_point_sample = FurthestPointSampling.apply
 
 # ===========================
-# 2. 特征收集操作（Gather Operation）
+# 2. 特征收集操作(Gather Operation)
 # ===========================
 class GatherOperation(Function):
     @staticmethod
@@ -79,7 +79,7 @@ class GatherOperation(Function):
 gather_operation = GatherOperation.apply
 
 # ===========================
-# 3. 三邻域查找（ThreeNN）
+# 3. 三邻域查找(ThreeNN)
 # ===========================
 class ThreeNN(Function):
     @staticmethod
@@ -103,7 +103,7 @@ class ThreeNN(Function):
 three_nn = ThreeNN.apply
 
 # ===========================
-# 4. 三点插值（ThreeInterpolate）
+# 4. 三点插值(ThreeInterpolate)
 # ===========================
 class ThreeInterpolate(Function):
     @staticmethod
@@ -121,7 +121,7 @@ class ThreeInterpolate(Function):
     @staticmethod
     def backward(ctx, grad_out):
         """
-        反向传播，计算特征的梯度
+        反向传播, 计算特征的梯度
         grad_out: (B, c, n)
         返回: grad_features, None, None
         """
@@ -135,7 +135,7 @@ class ThreeInterpolate(Function):
 three_interpolate = ThreeInterpolate.apply
 
 # ===========================
-# 5. 分组操作（Grouping Operation）
+# 5. 分组操作(Grouping Operation)
 # ===========================
 class GroupingOperation(Function):
     @staticmethod
@@ -152,7 +152,7 @@ class GroupingOperation(Function):
     @staticmethod
     def backward(ctx, grad_out):
         """
-        反向传播，计算特征的梯度
+        反向传播, 计算特征的梯度
         grad_out: (B, C, npoint, nsample)
         返回: grad_features, None
         """
@@ -164,13 +164,13 @@ class GroupingOperation(Function):
 grouping_operation = GroupingOperation.apply
 
 # ===========================
-# 6. 球查询操作（Ball Query）
+# 6. 球查询操作(Ball Query)
 # ===========================
 class BallQuery(Function):
     @staticmethod
     def forward(ctx, radius, nsample, xyz, new_xyz):
         """
-        球查询操作，在指定半径内查找邻域点
+        球查询操作, 在指定半径内查找邻域点
         radius: float 球半径
         nsample: int 每个球内最多采样的点数
         xyz: (B, N, 3) 所有点
@@ -189,11 +189,11 @@ class BallQuery(Function):
 ball_query = BallQuery.apply
 
 # ===========================
-# 7. 分组与特征拼接（QueryAndGroup）
+# 7. 分组与特征拼接(QueryAndGroup)
 # ===========================
 class QueryAndGroup(nn.Module):
     r"""
-    使用球查询（ball query）方式进行分组
+    使用球查询(ball query)方式进行分组
     radius: 球半径
     nsample: 每个球内最多采样的点数
     use_xyz: 是否将xyz坐标拼接到特征中
@@ -234,11 +234,11 @@ class QueryAndGroup(nn.Module):
         return new_features
 
 # ===========================
-# 8. 全局分组（GroupAll）
+# 8. 全局分组(GroupAll)
 # ===========================
 class GroupAll(nn.Module):
     r"""
-    对所有点进行分组（全局分组）
+    对所有点进行分组(全局分组)
     use_xyz: 是否将xyz坐标拼接到特征中
     """
 

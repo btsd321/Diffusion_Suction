@@ -16,13 +16,13 @@ import torch.nn as nn
 import numpy as np
 import pytorch_utils as pt_utils
 
-# 以下为可视化点云的工具函数（已注释，仅供参考）
+# 以下为可视化点云的工具函数(已注释, 仅供参考)
 # def show_points(point_array, color_array=None, radius=3):
 #     """
 #     可视化点云及其颜色
 #     参数:
-#         point_array: 点云列表，每个元素为(N, 3)的numpy数组
-#         color_array: 颜色列表，每个元素为(N, 3)的numpy数组
+#         point_array: 点云列表, 每个元素为(N, 3)的numpy数组
+#         color_array: 颜色列表, 每个元素为(N, 3)的numpy数组
 #         radius: 球体半径
 #     """
 #     assert isinstance(point_array, list)
@@ -68,7 +68,7 @@ if False:
 
 class RandomDropout(nn.Module):
     """
-    随机丢弃特征的模块，用于防止过拟合。
+    随机丢弃特征的模块, 用于防止过拟合。
     """
     def __init__(self, p=0.5, inplace=False):
         super(RandomDropout, self).__init__()
@@ -77,7 +77,7 @@ class RandomDropout(nn.Module):
 
     def forward(self, X):
         """
-        前向传播，随机丢弃部分特征。
+        前向传播, 随机丢弃部分特征。
         参数:
             X: 输入特征张量
         返回:
@@ -88,15 +88,15 @@ class RandomDropout(nn.Module):
 
 class FurthestPointSampling(Function):
     """
-    最远点采样操作，返回采样点的索引。
+    最远点采样操作, 返回采样点的索引。
     """
     @staticmethod
     def forward(ctx, xyz, npoint):
         """
-        前向传播，执行最远点采样。
+        前向传播, 执行最远点采样。
         参数:
             xyz: (B, N, 3) 输入点云坐标
-            npoint: int，采样点数
+            npoint: int, 采样点数
         返回:
             (B, npoint) 采样点的索引
         """
@@ -104,19 +104,19 @@ class FurthestPointSampling(Function):
 
     @staticmethod
     def backward(xyz, a=None):
-        # 采样操作不可微，反向传播返回None
+        # 采样操作不可微, 反向传播返回None
         return None, None
 
 furthest_point_sample = FurthestPointSampling.apply
 
 class GatherOperation(Function):
     """
-    按照索引采样特征的操作，支持反向传播。
+    按照索引采样特征的操作, 支持反向传播。
     """
     @staticmethod
     def forward(ctx, features, idx):
         """
-        前向传播，采样特征。
+        前向传播, 采样特征。
         参数:
             features: (B, C, N) 输入特征
             idx: (B, npoint) 采样索引
@@ -130,7 +130,7 @@ class GatherOperation(Function):
     @staticmethod
     def backward(ctx, grad_out):
         """
-        反向传播，将梯度累加回原始特征。
+        反向传播, 将梯度累加回原始特征。
         参数:
             grad_out: (B, C, npoint) 上游梯度
         返回:
@@ -150,7 +150,7 @@ class ThreeNN(Function):
     @staticmethod
     def forward(ctx, unknown, known):
         """
-        前向传播，查找unknown中每个点在known中的三个最近邻点。
+        前向传播, 查找unknown中每个点在known中的三个最近邻点。
         参数:
             unknown: (B, n, 3) 需要查找的点
             known: (B, m, 3) 已知点
@@ -163,19 +163,19 @@ class ThreeNN(Function):
 
     @staticmethod
     def backward(ctx, a=None, b=None):
-        # 最近邻查找不可微，反向传播返回None
+        # 最近邻查找不可微, 反向传播返回None
         return None, None
 
 three_nn = ThreeNN.apply
 
 class ThreeInterpolate(Function):
     """
-    三线性插值操作，用于特征插值。
+    三线性插值操作, 用于特征插值。
     """
     @staticmethod
     def forward(ctx, features, idx, weight):
         """
-        前向传播，对输入特征做三线性插值。
+        前向传播, 对输入特征做三线性插值。
         参数:
             features: (B, c, m) 已知点的特征
             idx: (B, n, 3) 三个最近邻的索引
@@ -191,7 +191,7 @@ class ThreeInterpolate(Function):
     @staticmethod
     def backward(ctx, grad_out):
         """
-        反向传播，将梯度累加回原始特征。
+        反向传播, 将梯度累加回原始特征。
         参数:
             grad_out: (B, c, n) 上游梯度
         返回:
@@ -209,12 +209,12 @@ three_interpolate = ThreeInterpolate.apply
 
 class GroupingOperation(Function):
     """
-    按照分组索引将特征分组的操作，支持反向传播。
+    按照分组索引将特征分组的操作, 支持反向传播。
     """
     @staticmethod
     def forward(ctx, features, idx):
         """
-        前向传播，分组特征。
+        前向传播, 分组特征。
         参数:
             features: (B, C, N) 输入特征
             idx: (B, npoint, nsample) 分组索引
@@ -229,7 +229,7 @@ class GroupingOperation(Function):
     @staticmethod
     def backward(ctx, grad_out):
         """
-        反向传播，将梯度累加回原始特征。
+        反向传播, 将梯度累加回原始特征。
         参数:
             grad_out: (B, C, npoint, nsample) 上游梯度
         返回:
@@ -244,15 +244,15 @@ grouping_operation = GroupingOperation.apply
 
 class BallQuery(Function):
     """
-    球查询操作，查找每个采样点的邻域点索引。
+    球查询操作, 查找每个采样点的邻域点索引。
     """
     @staticmethod
     def forward(ctx, radius, nsample, xyz, new_xyz):
         """
-        前向传播，查找new_xyz中每个点在xyz中的邻域点索引。
+        前向传播, 查找new_xyz中每个点在xyz中的邻域点索引。
         参数:
-            radius: float，球半径
-            nsample: int，最大邻域点数
+            radius: float, 球半径
+            nsample: int, 最大邻域点数
             xyz: (B, N, 3) 原始点坐标
             new_xyz: (B, npoint, 3) 查询中心点坐标
         返回:
@@ -262,14 +262,14 @@ class BallQuery(Function):
 
     @staticmethod
     def backward(ctx, a=None):
-        # 球查询不可微，反向传播返回None
+        # 球查询不可微, 反向传播返回None
         return None, None, None, None
 
 ball_query = BallQuery.apply
 
 class QueryAndGroup(nn.Module):
     """
-    球查询分组模块，将每个采样点的邻域点特征分组输出。
+    球查询分组模块, 将每个采样点的邻域点特征分组输出。
     """
     def __init__(self, radius, nsample, use_xyz=True):
         """
@@ -284,17 +284,17 @@ class QueryAndGroup(nn.Module):
 
     def forward(self, xyz, new_xyz, features=None):
         """
-        前向传播，分组采样点邻域特征。
+        前向传播, 分组采样点邻域特征。
         参数:
             xyz: (B, N, 3) 原始点坐标
             new_xyz: (B, npoint, 3) 采样点坐标
-            features: (B, C, N) 原始点特征（可选）
+            features: (B, C, N) 原始点特征(可选)
         返回:
             new_features: (B, 3+C, npoint, nsample) 分组后的特征
         详细说明：
-            1. 对每个采样点做球查询，获得邻域点索引。
+            1. 对每个采样点做球查询, 获得邻域点索引。
             2. 计算邻域点相对采样点的坐标差。
-            3. 若有特征，则拼接坐标差和特征，否则仅返回坐标差。
+            3. 若有特征, 则拼接坐标差和特征, 否则仅返回坐标差。
         """
         idx = ball_query(self.radius, self.nsample, xyz, new_xyz)
         xyz_trans = xyz.transpose(1, 2).contiguous()
@@ -319,7 +319,7 @@ class QueryAndGroup(nn.Module):
 
 class GroupAll(nn.Module):
     """
-    全局分组模块，将所有点分为一组。
+    全局分组模块, 将所有点分为一组。
     """
     def __init__(self, use_xyz=True):
         """
@@ -332,16 +332,16 @@ class GroupAll(nn.Module):
 
     def forward(self, xyz, new_xyz, features=None):
         """
-        前向传播，将所有点分为一组。
+        前向传播, 将所有点分为一组。
         参数:
             xyz: (B, N, 3) 原始点坐标
             new_xyz: (B, 1, 3) 虽然传入但实际未用
-            features: (B, C, N) 原始点特征（可选）
+            features: (B, C, N) 原始点特征(可选)
         返回:
             new_features: (B, C+3, 1, N) 全局分组特征
         详细说明：
-            1. 所有点作为一个分组，输出为(1, N)。
-            2. 若有特征则拼接xyz，否则仅输出xyz。
+            1. 所有点作为一个分组, 输出为(1, N)。
+            2. 若有特征则拼接xyz, 否则仅输出xyz。
         """
         grouped_xyz = xyz.transpose(1, 2).unsqueeze(2)
         if features is not None:

@@ -7,8 +7,8 @@ from pointnet2_ops import pointnet2_utils
 
 
 def build_shared_mlp(mlp_spec: List[int], bn: bool = True):
-    # 构建共享的多层感知机（MLP），可选是否使用批归一化
-    # mlp_spec: 每层的通道数列表，例如[64,128,256]
+    # 构建共享的多层感知机(MLP), 可选是否使用批归一化
+    # mlp_spec: 每层的通道数列表, 例如[64,128,256]
     # bn: 是否使用BatchNorm
     layers = []
     for i in range(1, len(mlp_spec)):
@@ -24,19 +24,19 @@ def build_shared_mlp(mlp_spec: List[int], bn: bool = True):
 
 class _PointnetSAModuleBase(nn.Module):
     """
-    PointNet++ 的集合抽象（SA）模块基类，支持采样和分组操作。
+    PointNet++ 的集合抽象(SA)模块基类, 支持采样和分组操作。
     """
     def __init__(self):
         super(_PointnetSAModuleBase, self).__init__()
         self.npoint = None      # 采样点数
-        self.groupers = None    # 分组操作器（如球查询）
+        self.groupers = None    # 分组操作器(如球查询)
         self.mlps = None        # 每个分组对应的MLP
 
     def forward(
         self, xyz: torch.Tensor, features: Optional[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         r"""
-        前向传播，进行采样、分组、特征聚合。
+        前向传播, 进行采样、分组、特征聚合。
 
         参数说明
         ----------
@@ -69,14 +69,14 @@ class _PointnetSAModuleBase(nn.Module):
         )
 
         for i in range(len(self.groupers)):
-            # 分组操作，得到每个中心点的邻域特征 (B, C, npoint, nsample)
+            # 分组操作, 得到每个中心点的邻域特征 (B, C, npoint, nsample)
             new_features = self.groupers[i](
                 xyz, new_xyz, features
             )
 
             # 经过MLP处理 (B, mlp[-1], npoint, nsample)
             new_features = self.mlps[i](new_features)
-            # 在每个分组内做最大池化，得到每个中心点的特征 (B, mlp[-1], npoint, 1)
+            # 在每个分组内做最大池化, 得到每个中心点的特征 (B, mlp[-1], npoint, 1)
             new_features = F.max_pool2d(
                 new_features, kernel_size=[1, new_features.size(3)]
             )
@@ -90,9 +90,9 @@ class _PointnetSAModuleBase(nn.Module):
 
 
 class PointnetSAModuleMSG(_PointnetSAModuleBase):
-    r"""PointNet多尺度分组的集合抽象层（MSG）
+    r"""PointNet多尺度分组的集合抽象层(MSG)
 
-    支持对每个采样点用不同半径、不同采样数的球查询，提取多尺度特征。
+    支持对每个采样点用不同半径、不同采样数的球查询, 提取多尺度特征。
     参数说明
     ----------
     npoint : int
@@ -120,7 +120,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
         for i in range(len(radii)):
             radius = radii[i]
             nsample = nsamples[i]
-            # 构建分组操作器（球查询或全局分组）
+            # 构建分组操作器(球查询或全局分组)
             self.groupers.append(
                 pointnet2_utils.QueryAndGroup(radius, nsample, use_xyz=use_xyz)
                 if npoint is not None
@@ -134,9 +134,9 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
 
 
 class PointnetSAModule(PointnetSAModuleMSG):
-    r"""PointNet集合抽象层（单尺度分组）
+    r"""PointNet集合抽象层(单尺度分组)
 
-    只用一个球查询和一个MLP，适合简单场景。
+    只用一个球查询和一个MLP, 适合简单场景。
     参数说明
     ----------
     npoint : int
@@ -167,9 +167,9 @@ class PointnetSAModule(PointnetSAModuleMSG):
 
 
 class PointnetFPModule(nn.Module):
-    r"""特征传播模块（Feature Propagation），用于插值上采样，将已知点集的特征传播到未知点集。
+    r"""特征传播模块(Feature Propagation), 用于插值上采样, 将已知点集的特征传播到未知点集。
 
-    常用于PointNet++的解码阶段，实现点云特征的逐层细化。
+    常用于PointNet++的解码阶段, 实现点云特征的逐层细化。
     参数说明
     ----------
     mlp : list
@@ -184,16 +184,16 @@ class PointnetFPModule(nn.Module):
 
     def forward(self, unknown, known, unknow_feats, known_feats):
         r"""
-        前向传播，插值传播特征。
+        前向传播, 插值传播特征。
 
         参数说明
         ----------
         unknown : torch.Tensor
-            (B, n, 3) 未知点的三维坐标（需要插值的点）
+            (B, n, 3) 未知点的三维坐标(需要插值的点)
         known : torch.Tensor
-            (B, m, 3) 已知点的三维坐标（有特征的点）
+            (B, m, 3) 已知点的三维坐标(有特征的点)
         unknow_feats : torch.Tensor
-            (B, C1, n) 未知点的特征（可选）
+            (B, C1, n) 未知点的特征(可选)
         known_feats : torch.Tensor
             (B, C2, m) 已知点的特征
 
@@ -204,7 +204,7 @@ class PointnetFPModule(nn.Module):
         """
 
         if known is not None:
-            # 三邻域插值，计算距离和索引
+            # 三邻域插值, 计算距离和索引
             dist, idx = pointnet2_utils.three_nn(unknown, known)
             dist_recip = 1.0 / (dist + 1e-8)  # 防止除零
             norm = torch.sum(dist_recip, dim=2, keepdim=True)
@@ -215,7 +215,7 @@ class PointnetFPModule(nn.Module):
                 known_feats, idx, weight
             )
         else:
-            # 如果没有已知点，直接扩展特征
+            # 如果没有已知点, 直接扩展特征
             interpolated_feats = known_feats.expand(
                 *(known_feats.size()[0:2] + [unknown.size(1)])
             )

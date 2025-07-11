@@ -50,8 +50,8 @@ class BlenderRenderClass:
     def __init__(self, ):
         # *****Blender 相机参数设置*****
         resolution = [1920, 1200]  # 渲染分辨率
-        focal_length = 16.0        # 相机焦距，单位mm
-        sensor_size =  [11.25, 7.03]  # 相机传感器尺寸，单位mm
+        focal_length = 16.0        # 相机焦距, 单位mm
+        sensor_size =  [11.25, 7.03]  # 相机传感器尺寸, 单位mm
         cam_location_x_y_z = [0, 0, 1.70]  # 相机在三维空间的位置
         # cam_rotation_qw_qx_qy_qz = [0, -0.70710678, -0.70710678, 0] # [90. ,  0. ,180.]
         cam_rotation_qw_qx_qy_qz = [0.000000e+00 ,0.000000e+00 ,1.000000e+00 ,6.123234e-17]  # [0. ,  0. ,180.]
@@ -83,7 +83,7 @@ class BlenderRenderClass:
 
         bpy.data.scenes["Scene"].render.resolution_percentage = 100
 
-        # 设置相机焦距和传感器尺寸，单位为毫米
+        # 设置相机焦距和传感器尺寸, 单位为毫米
         bpy.data.cameras["Camera"].type = "PERSP"
         bpy.data.cameras["Camera"].lens = self.CAMERA_FOCAL_LEN
         bpy.data.cameras["Camera"].lens_unit = "MILLIMETERS"
@@ -110,25 +110,25 @@ class BlenderRenderClass:
                                                           self.CAMERA_ROTATION[1],
                                                           self.CAMERA_ROTATION[2],
                                                           self.CAMERA_ROTATION[3]]
-        # 让相机坐标系绕X轴旋转180度，适配Blender坐标系
+        # 让相机坐标系绕X轴旋转180度, 适配Blender坐标系
         bpy.data.objects["Camera"].rotation_mode = 'XYZ'
         bpy.data.objects["Camera"].rotation_euler[0] = bpy.data.objects["Camera"].rotation_euler[0] + math.pi
 
-        # 清除现有的灯光对象，避免多余光源影响渲染
+        # 清除现有的灯光对象, 避免多余光源影响渲染
         bpy.ops.object.select_all(action='DESELECT')
         bpy.ops.object.select_by_type(type='LAMP')  # 选择所有灯光对象
         bpy.ops.object.delete()
 
-        # 创建平行光（Sun Light），用于模拟环境主光源
+        # 创建平行光(Sun Light), 用于模拟环境主光源
         bpy.ops.object.lamp_add(type='SUN', location=(0, 0, 2))  # 添加平行光源并设置其位置
         sun_light = bpy.context.object  # 获取刚创建的光源对象
         sun_light.name = "Sun_Light"  # 给光源命名
         # 设置平行光的属性
         sun_light.data.energy = 10  # 设置光源强度
         sun_light.data.color = (1, 1, 1)  # 设置光源颜色为白色 (RGB)
-        sun_light.data.use_nodes = True  # 启用节点系统（如果需要控制光源的其他属性）
+        sun_light.data.use_nodes = True  # 启用节点系统(如果需要控制光源的其他属性)
         
-        # 创建多个点光源，增强场景整体照明
+        # 创建多个点光源, 增强场景整体照明
         locations_z = 1.3
         locations = [[0,0,locations_z],[0,locations_z*0.5,locations_z],[locations_z*0.5,0,locations_z],[0,-locations_z*0.5,locations_z],[-locations_z*0.5,0,locations_z]]
         for i in range(5):
@@ -138,7 +138,7 @@ class BlenderRenderClass:
             point_light.data.energy = 10  # 设置光源强度
             
     def read_csv(self, csv_path):      
-        # 读取csv文件，返回物体名称、位姿、索引
+        # 读取csv文件, 返回物体名称、位姿、索引
         with open(csv_path,'r') as csv_file:  
             all_lines=csv.reader(csv_file) 
             list_file = [i for i in all_lines]  # 读取所有行
@@ -149,7 +149,7 @@ class BlenderRenderClass:
         return obj_name, pose, obj_index
 
     def import_obj(self, obj_name, pose, instance_index):
-        # 导入指定物体到Blender场景中，并设置其位姿
+        # 导入指定物体到Blender场景中, 并设置其位姿
         for o in bpy.data.objects:
             if o.type == 'MESH':
                 o.select = True
@@ -165,7 +165,7 @@ class BlenderRenderClass:
             print(bpy.context.selected_objects)
             print(instance_index_)
             instance.pass_index = instance_index_
-            instance.scale = [0.001, 0.001, 0.001]  # 设置缩放（毫米转米）
+            instance.scale = [0.001, 0.001, 0.001]  # 设置缩放(毫米转米)
             instance.location = [pose[instance_index_][0], pose[instance_index_][1], pose[instance_index_][2]]
             instance.rotation_mode = 'QUATERNION'
             instance.rotation_quaternion = [pose[instance_index_][3], pose[instance_index_][4], pose[instance_index_][5], pose[instance_index_][6]]
@@ -211,7 +211,7 @@ class BlenderRenderClass:
         multiply = nodes.new("CompositorNodeMath")
         multiply.operation = "MULTIPLY"
 
-        # 一个输出用于深度图，另一个用于标签图
+        # 一个输出用于深度图, 另一个用于标签图
         output_file_depth = nodes.new("CompositorNodeOutputFile")
         output_file_depth.base_path = depth_path
         output_file_depth.format.file_format = "PNG"
@@ -238,12 +238,12 @@ class BlenderRenderClass:
         links.new(divide.outputs[0], viewer.inputs['Image'])
         links.new(render_layers.outputs['Image'], output_file_label.inputs['Image'])
 
-    # 定义物体的材质（如颜色），并让所有物体指向同一个材质
+    # 定义物体的材质(如颜色), 并让所有物体指向同一个材质
     def label_graph(self, label_number):
 
         # 遍历场景中的所有物体
         for obj in bpy.context.scene.objects:
-            # 只处理网格对象（你可以根据需要调整条件）
+            # 只处理网格对象(你可以根据需要调整条件)
             if obj.type == 'MESH':
                 # 确保物体有材质槽
                 if obj.data.materials:

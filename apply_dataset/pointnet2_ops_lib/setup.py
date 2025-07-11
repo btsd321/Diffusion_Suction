@@ -20,10 +20,10 @@ _ext_headers = glob.glob(osp.join(_ext_src_root, "include", "*"))
 # 指定依赖的PyTorch版本
 requirements = ["torch>=1.4"]
 
-# 读取版本号（从pointnet2_ops/_version.py文件中）
+# 读取版本号(从pointnet2_ops/_version.py文件中)
 exec(open(osp.join("pointnet2_ops", "_version.py")).read())
 
-# 指定支持的CUDA架构（可根据实际显卡情况调整）
+# 指定支持的CUDA架构(可根据实际显卡情况调整)
 os.environ["TORCH_CUDA_ARCH_LIST"] = "3.7+PTX;5.0;6.0;6.1;6.2;7.0;7.5"
 
 # 配置并编译pointnet2_ops模块

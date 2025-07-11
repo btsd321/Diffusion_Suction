@@ -22,7 +22,7 @@ import yaml
 CYCLE_idx_list = range(0, 100)    # 100个循环
 SCENE_idx_list = range(1, 51)     # 每个循环50个场景
 
-# 相机的空间位置和旋转（四元数）
+# 相机的空间位置和旋转(四元数)
 CAMERA_LOCATION = [0, 0, 1.70]
 CAMERA_ROTATION = [0.000000e+00 ,0.000000e+00 ,1.000000e+00 ,6.123234e-17]
 
@@ -34,13 +34,13 @@ if not os.path.exists(GT_PATH):
 
 def read_csv(csv_path):        
     """
-    读取单个csv文件，返回物体名称、索引和位姿
+    读取单个csv文件, 返回物体名称、索引和位姿
     输入:
         csv_path: csv文件路径
     输出:
         obj_name: 物体名称数组
         obj_index: 物体索引数组
-        pose: 物体位姿数组（x, y, z, qx, qy, qz, qw）
+        pose: 物体位姿数组(x, y, z, qx, qy, qz, qw)
     """
     with open(csv_path,'r') as csv_file:  
         all_lines=csv.reader(csv_file) 
@@ -62,24 +62,24 @@ def generate_gt(pose_world):
 
     # 相机外参
     t_c2w = np.array(CAMERA_LOCATION).reshape(1, 3)  # 相机在世界坐标系下的平移
-    quat_c2w = np.array(CAMERA_ROTATION)             # 相机在世界坐标系下的旋转（四元数）
+    quat_c2w = np.array(CAMERA_ROTATION)             # 相机在世界坐标系下的旋转(四元数)
     R_c2w  = nq.quat2mat(quat_c2w).reshape(3,3)      # 转换为旋转矩阵
 
     # 世界坐标系下的平移和旋转
     t_world = pose_world[:,:3]                       # 物体在世界坐标系下的平移
-    quat_world = pose_world[:,3:]                    # 物体在世界坐标系下的旋转（四元数）
+    quat_world = pose_world[:,3:]                    # 物体在世界坐标系下的旋转(四元数)
     R_world = [nq.quat2mat(quat) for quat in quat_world]  # 转换为旋转矩阵
 
     # 生成相机坐标系下的平移和旋转
     t_camera = np.array([(np.dot(R_c2w, t) + t_c2w).reshape(3) \
                       for t in t_world])            # 物体在相机坐标系下的平移
     R_camera = np.array([np.dot(R_c2w, R.reshape(3,3)).reshape(9) \
-                      for R in R_world])            # 物体在相机坐标系下的旋转（展平成9维）
+                      for R in R_world])            # 物体在相机坐标系下的旋转(展平成9维)
     pose_camera = np.concatenate((t_camera, R_camera),axis=-1)  # 拼接为最终结果
     return pose_camera
 
 if __name__ == "__main__":
-    # 遍历所有循环和场景，批量生成GT
+    # 遍历所有循环和场景, 批量生成GT
     for cycle_id in CYCLE_idx_list:
         for scene_id in SCENE_idx_list:
             # 构建当前循环和场景的csv路径

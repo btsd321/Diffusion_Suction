@@ -16,7 +16,7 @@ def register_to_config(init):
     """
     装饰器：用于自动将__init__的参数注册到配置中。
     适用于继承自ConfigMixin的类。可通过ignore_for_config类变量忽略部分参数。
-    注意：被装饰后，所有以_开头的私有参数不会被注册。
+    注意：被装饰后, 所有以_开头的私有参数不会被注册。
     """
     @functools.wraps(init)
     def inner_init(self, *args, **kwargs):
@@ -50,11 +50,11 @@ def register_to_config(init):
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999) -> torch.Tensor:
     """
-    根据累计alpha_bar函数生成beta序列，用于扩散过程的噪声调度。
+    根据累计alpha_bar函数生成beta序列, 用于扩散过程的噪声调度。
 
     参数:
         num_diffusion_timesteps (int): beta的步数
-        max_beta (float): beta的最大值，防止数值不稳定
+        max_beta (float): beta的最大值, 防止数值不稳定
 
     返回:
         betas (torch.Tensor): 调度器使用的beta序列
@@ -71,7 +71,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999) -> torch.Tensor
 
 class DDIMScheduler():
     """
-    DDIM调度器类，实现去噪扩散隐式模型（DDIM）的采样调度逻辑。
+    DDIM调度器类, 实现去噪扩散隐式模型(DDIM)的采样调度逻辑。
     支持多种beta调度方式、采样步数设置、噪声添加、反向采样等功能。
     """
     config_name = "scheduler_config.json"
@@ -99,12 +99,12 @@ class DDIMScheduler():
             num_train_timesteps: 训练时扩散步数
             beta_start: beta起始值
             beta_end: beta结束值
-            beta_schedule: beta调度方式（linear/scaled_linear/squaredcos_cap_v2）
+            beta_schedule: beta调度方式(linear/scaled_linear/squaredcos_cap_v2)
             trained_betas: 直接指定的beta序列
             clip_sample: 是否对预测结果裁剪到[-1,1]
             set_alpha_to_one: 最后一步alpha是否设为1
             steps_offset: 步数偏移
-            prediction_type: 预测类型（epsilon/sample/v_prediction）
+            prediction_type: 预测类型(epsilon/sample/v_prediction)
             **kwargs: 兼容历史参数
         """
         message = (
@@ -134,7 +134,7 @@ class DDIMScheduler():
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
 
         # 每一步都需要用到前一步的alphas_cumprod
-        # 最后一步没有前一步，set_alpha_to_one决定是否直接设为1
+        # 最后一步没有前一步, set_alpha_to_one决定是否直接设为1
         self.final_alpha_cumprod = torch.tensor(1.0) if set_alpha_to_one else self.alphas_cumprod[0]
 
         # 初始噪声分布的标准差
@@ -170,28 +170,28 @@ class DDIMScheduler():
     @property
     def config(self):
         """
-        获取当前对象的配置（以SimpleNamespace形式返回）。
+        获取当前对象的配置(以SimpleNamespace形式返回)。
         返回:
-            SimpleNamespace对象，包含所有配置参数。
+            SimpleNamespace对象, 包含所有配置参数。
         """
         return SimpleNamespace(**self._internal_dict)
         
     def scale_model_input(self, sample: torch.FloatTensor, timestep: Optional[int] = None) -> torch.FloatTensor:
         """
-        （兼容接口）部分调度器需要根据timestep缩放输入，本实现直接返回原样。
+        (兼容接口)部分调度器需要根据timestep缩放输入, 本实现直接返回原样。
 
         参数:
             sample: 输入样本
-            timestep: 当前步数（可选）
+            timestep: 当前步数(可选)
 
         返回:
-            缩放后的样本（本实现为原样返回）
+            缩放后的样本(本实现为原样返回)
         """
         return sample
 
     def _get_variance(self, timestep, prev_timestep):
         """
-        计算当前步与前一步的方差，用于采样过程中的噪声注入。
+        计算当前步与前一步的方差, 用于采样过程中的噪声注入。
 
         参数:
             timestep: 当前步数
@@ -211,15 +211,15 @@ class DDIMScheduler():
 
     def set_timesteps(self, num_inference_steps: int, device: Union[str, torch.device] = None):
         """
-        设置采样过程中的离散步数（timesteps），推理前需调用。
+        设置采样过程中的离散步数(timesteps), 推理前需调用。
 
         参数:
             num_inference_steps: 推理时的采样步数
-            device: 设备（可选）
+            device: 设备(可选)
         """
         self.num_inference_steps = num_inference_steps
         step_ratio = self.config.num_train_timesteps // self.num_inference_steps
-        # 生成采样步数序列（倒序）
+        # 生成采样步数序列(倒序)
         timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
         self.timesteps = torch.from_numpy(timesteps).to(device)
         self.timesteps += self.config.steps_offset
@@ -236,20 +236,20 @@ class DDIMScheduler():
         return_dict: bool = True,
     ) -> Union[Dict, Tuple]:
         """
-        反向采样一步，根据当前模型输出和采样状态预测上一步的样本。
+        反向采样一步, 根据当前模型输出和采样状态预测上一步的样本。
 
         参数:
-            model_output: 扩散模型的直接输出（通常为噪声）
+            model_output: 扩散模型的直接输出(通常为噪声)
             timestep: 当前步数
             sample: 当前采样状态
             eta: 噪声权重
             use_clipped_model_output: 是否使用裁剪后的模型输出
             generator: 随机数生成器
-            variance_noise: 直接指定的方差噪声（如CycleDiffusion用）
+            variance_noise: 直接指定的方差噪声(如CycleDiffusion用)
             return_dict: 是否以字典形式返回结果
 
         返回:
-            如果return_dict为True，返回{'prev_sample': ..., 'pred_original_sample': ...}
+            如果return_dict为True, 返回{'prev_sample': ..., 'pred_original_sample': ...}
             否则返回(prev_sample,)
         """
         if self.num_inference_steps is None:
@@ -288,16 +288,16 @@ class DDIMScheduler():
         std_dev_t = eta * variance ** (0.5)
 
         if use_clipped_model_output:
-            # 若使用裁剪后的x0，需重新计算模型输出
+            # 若使用裁剪后的x0, 需重新计算模型输出
             model_output = (sample - alpha_prod_t ** (0.5) * pred_original_sample) / beta_prod_t ** (0.5)
 
         # 6. 计算采样方向
         pred_sample_direction = (1 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * model_output
 
-        # 7. 计算上一步的采样结果（不加噪声）
+        # 7. 计算上一步的采样结果(不加噪声)
         prev_sample = alpha_prod_t_prev ** (0.5) * pred_original_sample + pred_sample_direction
 
-        # 8. 若eta>0，加入噪声
+        # 8. 若eta>0, 加入噪声
         if eta > 0:
             device = model_output.device
             if variance_noise is not None and generator is not None:
@@ -329,7 +329,7 @@ class DDIMScheduler():
         timesteps: torch.IntTensor,
     ) -> torch.FloatTensor:
         """
-        给定原始样本、噪声和步数，生成扩散过程中的带噪样本。
+        给定原始样本、噪声和步数, 生成扩散过程中的带噪样本。
 
         参数:
             original_samples: 原始样本
@@ -359,7 +359,7 @@ class DDIMScheduler():
         self, sample: torch.FloatTensor, noise: torch.FloatTensor, timesteps: torch.IntTensor
     ) -> torch.FloatTensor:
         """
-        计算扩散过程中的速度（velocity），用于某些扩散模型的特殊训练目标。
+        计算扩散过程中的速度(velocity), 用于某些扩散模型的特殊训练目标。
 
         参数:
             sample: 当前样本

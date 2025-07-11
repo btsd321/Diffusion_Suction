@@ -3,7 +3,7 @@
 @author: Huang Dingtao
 @checked: Huang Dingtao
 
-本脚本用于计算每个场景中每个物体的单独面积比例，并将结果保存为csv文件。
+本脚本用于计算每个场景中每个物体的单独面积比例, 并将结果保存为csv文件。
 """
 
 import os
@@ -37,11 +37,11 @@ if not os.path.exists(individual_object_size):
 
 def render_scenes():
     """
-    遍历所有循环和场景，计算每个场景中每个物体的单独面积比例，并保存为csv文件。
+    遍历所有循环和场景, 计算每个场景中每个物体的单独面积比例, 并保存为csv文件。
     """
     for cycle_id in CYCLE_idx_list:
         for scene_id in SCENE_idx_list:
-            # 读取当前循环和场景下的多物体分割图像（EXR格式，包含ID信息）
+            # 读取当前循环和场景下的多物体分割图像(EXR格式, 包含ID信息)
             image_ids = cv2.imread(
                 os.path.join(
                     OUTDIR_dir_segment_images,
@@ -51,7 +51,7 @@ def render_scenes():
                 ),
                 cv2.IMREAD_UNCHANGED
             )
-            # 计算所有物体的掩码id（通过分割图像的第二通道归一化得到）
+            # 计算所有物体的掩码id(通过分割图像的第二通道归一化得到)
             mask_ids_all = np.round(image_ids[:,:, 1] * (scene_id - 1)).astype('int')
 
             areas_id = []  # 存储每个物体的面积比例
@@ -67,17 +67,17 @@ def render_scenes():
                     ),
                     cv2.IMREAD_UNCHANGED
                 )
-                # 获取当前物体的掩码（第三通道为1的位置为当前物体）
+                # 获取当前物体的掩码(第三通道为1的位置为当前物体)
                 mask_id = image_id[:,:, 2] == 1
                 # 获取所有物体的掩码中属于当前物体的部分
                 mask_ids = mask_ids_all == i
-                # 只保留当前物体的掩码区域（排除背景或其他物体）
+                # 只保留当前物体的掩码区域(排除背景或其他物体)
                 mask_ids[[image_ids[:,:, 2] != 1]] = 0
                 if np.sum(mask_id) != 0:
                     # 计算当前物体的面积比例 = 多物体分割中该物体像素数 / 单物体分割中该物体像素数
                     areas_id.append(np.sum(mask_ids) / np.sum(mask_id))
                 else:
-                    # 若单物体掩码为0，则面积比例为0
+                    # 若单物体掩码为0, 则面积比例为0
                     areas_id.append(0)
 
             # 构建当前循环和场景的保存路径
@@ -90,7 +90,7 @@ def render_scenes():
                 os.makedirs(save_path)
             file_loc = save_path + '/' + '{:0>3}'.format(scene_id) + '.csv'
             assert len(areas_id) == scene_id  # 检查每个场景的物体数量一致
-            # 将面积比例写入csv文件，每一列为一个物体的面积比例
+            # 将面积比例写入csv文件, 每一列为一个物体的面积比例
             with open(file_loc, 'w', newline='') as f:
                 f_csv = csv.writer(f)
                 f_csv.writerow(areas_id)

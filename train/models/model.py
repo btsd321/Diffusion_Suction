@@ -18,7 +18,7 @@ from typing import Union, Dict, Tuple, Optional
 class SpatialAttention(nn.Module):
     """
     空间注意力机制模块。
-    通过对输入特征在通道维度做平均池化和最大池化，拼接后经过卷积和sigmoid激活，生成空间注意力权重，对输入特征进行加权。
+    通过对输入特征在通道维度做平均池化和最大池化, 拼接后经过卷积和sigmoid激活, 生成空间注意力权重, 对输入特征进行加权。
     """
     def __init__(self):
         super(SpatialAttention, self).__init__()
@@ -34,7 +34,7 @@ class SpatialAttention(nn.Module):
 class ChannelAttention(nn.Module):
     """
     通道注意力机制模块。
-    通过全局平均池化和最大池化，经过两层卷积和激活，生成通道注意力权重，对输入特征进行加权。
+    通过全局平均池化和最大池化, 经过两层卷积和激活, 生成通道注意力权重, 对输入特征进行加权。
     """
     def __init__(self, in_channels, ratio=16):
         super(ChannelAttention, self).__init__()
@@ -57,15 +57,15 @@ class ChannelAttention(nn.Module):
 class ScheduledCNNRefine(nn.Module):
     """
     带有噪声和时间步嵌入的卷积细化模块。
-    用于扩散模型的去噪预测，支持噪声特征和时间步特征的融合，并集成通道和空间注意力机制。
+    用于扩散模型的去噪预测, 支持噪声特征和时间步特征的融合, 并集成通道和空间注意力机制。
     """
     def __init__(self, channels_in = 128, channels_noise = 4, **kwargs):
         super().__init__(**kwargs)
-        # 噪声嵌入网络，将噪声特征映射到与主特征相同的通道数
+        # 噪声嵌入网络, 将噪声特征映射到与主特征相同的通道数
         self.noise_embedding = nn.Sequential(
             nn.Conv1d(channels_noise, 64, 1),
             nn.GroupNorm(4, 64),
-            # 不能用batch norm，会统计输入方差，方差会不停的变
+            # 不能用batch norm, 会统计输入方差, 方差会不停的变
             nn.ReLU(True),
             nn.Conv1d(64, 128, 1),
             nn.GroupNorm(4, 128),
@@ -73,7 +73,7 @@ class ScheduledCNNRefine(nn.Module):
             nn.Conv1d(128, channels_in, 1),
         )
 
-        # 时间步嵌入，最大支持1280个时间步
+        # 时间步嵌入, 最大支持1280个时间步
         self.time_embedding = nn.Embedding(1280, channels_in)
 
         # 主预测网络
@@ -92,7 +92,7 @@ class ScheduledCNNRefine(nn.Module):
 
     def forward(self, noisy_image, t, feat):
         """
-        前向传播，融合噪声、时间步和主特征，输出去噪预测。
+        前向传播, 融合噪声、时间步和主特征, 输出去噪预测。
 
         参数:
             noisy_image: 输入噪声图像 (B, N, C_noise)
@@ -118,7 +118,7 @@ class ScheduledCNNRefine(nn.Module):
 class CNNDDIMPipiline:
     '''
     DDIM采样推理流程封装类。
-    用于扩散模型的采样过程，支持自定义步数、噪声、特征输入等。
+    用于扩散模型的采样过程, 支持自定义步数、噪声、特征输入等。
     '''
     def __init__(self, model, scheduler):
         super().__init__()
@@ -138,13 +138,13 @@ class CNNDDIMPipiline:
             **kwargs,
     ) -> Union[Dict, Tuple]:
         """
-        执行DDIM采样过程，生成最终预测结果。
+        执行DDIM采样过程, 生成最终预测结果。
 
         参数:
             batch_size: 批量大小
             device: 设备
             dtype: 数据类型
-            shape: 输出形状（不含batch维）
+            shape: 输出形状(不含batch维)
             features: 主特征输入
             generator: 随机数生成器
             eta: 采样噪声系数
@@ -186,7 +186,7 @@ class CNNDDIMPipiline:
 
 class dsnet(nn.Module):
     """
-    dsnet主网络类，集成了点云特征提取、扩散模型、损失计算等功能。
+    dsnet主网络类, 集成了点云特征提取、扩散模型、损失计算等功能。
     支持训练和推理两种模式。
     """
     def __init__(self, use_vis_branch, return_loss):
@@ -219,10 +219,10 @@ class dsnet(nn.Module):
 
     def ddim_loss(self, condit, gt,):
         """
-        计算DDIM扩散模型的损失（MSE），用于训练阶段。
+        计算DDIM扩散模型的损失(MSE), 用于训练阶段。
 
         参数:
-            condit: 条件特征（如点云特征）
+            condit: 条件特征(如点云特征)
             gt: 真实标签
 
         返回:
@@ -236,7 +236,7 @@ class dsnet(nn.Module):
 
         # 随机采样每个样本的时间步
         timesteps = torch.randint(0, self.scheduler.num_train_timesteps, (bs,), device=gt.device).long()
-        # 前向扩散过程，添加噪声
+        # 前向扩散过程, 添加噪声
         noisy_images = self.scheduler.add_noise(gt_norm, noise, timesteps)
 
         noise_pred = self.model(noisy_images, timesteps, condit)
@@ -251,11 +251,11 @@ class dsnet(nn.Module):
         网络前向推理或训练。
 
         参数:
-            inputs: 输入字典，包含点云和标签
+            inputs: 输入字典, 包含点云和标签
 
         返回:
             pred_results: 推理结果或None
-            ddim_loss: 损失（训练时返回，否则为None）
+            ddim_loss: 损失(训练时返回, 否则为None)
         """
         batch_size = inputs['point_clouds'].shape[0]
         num_point = inputs['point_clouds'].shape[1]
@@ -265,7 +265,7 @@ class dsnet(nn.Module):
         input_points = torch.cat((input_points, inputs['labels']['suction_or']), dim=2)
         features, global_features = self.backbone(input_points)
 
-        if self.return_loss:  # 训练模式，计算损失
+        if self.return_loss:  # 训练模式, 计算损失
             s1 = inputs['labels']['suction_seal_scores'].unsqueeze(-1)
             s2 = inputs['labels']['suction_wrench_scores'].unsqueeze(-1)
             s3 = inputs['labels']['suction_feasibility_scores'].unsqueeze(-1)
@@ -303,7 +303,7 @@ class dsnet(nn.Module):
 
     def visibility_loss(self, pred_vis, vis_label):
         """
-        计算可见性损失（L1损失）。
+        计算可见性损失(L1损失)。
 
         参数:
             pred_vis: 预测值
@@ -320,7 +320,7 @@ class dsnet(nn.Module):
         计算各分支损失及总损失。
 
         参数:
-            preds_flatten: 预测结果（各分支）
+            preds_flatten: 预测结果(各分支)
             labels: 标签字典
 
         返回:
@@ -416,7 +416,7 @@ def save_pth(pth_path, current_epoch, net, optimizer, loss):
     保存网络和优化器的断点为.pth文件。
 
     参数:
-        pth_path: 保存路径（不含后缀）
+        pth_path: 保存路径(不含后缀)
         current_epoch: 当前epoch编号
         net: torch.nn.Module实例
         optimizer: torch.optim.Optimizer实例
