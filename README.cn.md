@@ -62,7 +62,10 @@ git clone https://github.com/TAO-TAO-TAO-TAO-TAO/Diffusion_Suction.git
 
 ---
 
-### 2. 训练 Diffusion-Suction 网络
+### 2. 构建 Parcel-Suction-Dataset
+在Windows环境下Blender中运行generate_dataset中的脚本生成数据集
+
+### 3. 训练 Diffusion-Suction 网络
 ```bash
 cd train\Sparepart\train.py
 python train.py 
@@ -70,7 +73,7 @@ python train.py
 
 ---
 
-### 3. 在自定义数据上评估
+### 4. 在自定义数据上评估
 
 - Parcel-Suction-Dataset 可在 [这里](https://drive.google.com/drive/folders/1l4jz7LE7HXdn2evylodggReTTnip7J1Q?usp=sharing) 下载。
 - SuctionNet-1Billion 可在 [这里](https://github.com/graspnet/suctionnetAPI) 获取。
