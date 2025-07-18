@@ -36,10 +36,10 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from models.model import dsnet, load_checkpoint, save_checkpoint
-from models.utils.train_helper import BNMomentumScheduler, OptimizerLRScheduler, SimpleLogger
-from models.data.pointcloud_transforms import PointCloudShuffle, ToTensor
-from models.data.dataset_plus import DiffusionSuctionNetDataset
+from diffusion_suctionnet_model.model import dsnet, load_checkpoint, save_checkpoint
+from diffusion_suctionnet_model.utils.train_helper import BNMomentumScheduler, OptimizerLRScheduler, SimpleLogger
+from diffusion_suctionnet_model.data.pointcloud_transforms import PointCloudShuffle, ToTensor
+from diffusion_suctionnet_model.data.dataset_plus import DiffusionSuctionNetDataset
 
 # ======================== 分布式训练参数与环境初始化 ========================
 if gpus_is :
