@@ -1,0 +1,3 @@
+[submodule "thirdparty/pointnet2"]
+	path = thirdparty/diffusion_suctionnet_model
+	url = https://github.com/btsd321/diffusion_suctionnet_model.git

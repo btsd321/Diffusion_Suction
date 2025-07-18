@@ -38,14 +38,14 @@ git clone https://github.com/TAO-TAO-TAO-TAO-TAO/Diffusion_Suction.git
 
 - 安装 [Pytorch](https://pytorch.org/get-started/locally/)。本项目需使用 GPU，代码在 Ubuntu 16.04/18.04、CUDA 10.0 和 cuDNN v7.4、python3.6 下测试通过。
 - 主干网络 PointNet++ 源自 [pointnet2](https://github.com/erikwijmans/Pointnet2_PyTorch)。
-- 编译 PointNet++ 的 CUDA 层（用于主干网络）：
+- 编译 PointNet++ 的 CUDA 层(用于主干网络)：
 
     ```bash
     cd train\Sparepart\train.py
     python train.py install
     ```
 
-- 安装以下 Python 依赖（使用 `pip install`）：
+- 安装以下 Python 依赖(使用 `pip install`)：
 
     ```bash
     matplotlib
@@ -62,7 +62,10 @@ git clone https://github.com/TAO-TAO-TAO-TAO-TAO/Diffusion_Suction.git
 
 ---
 
-### 2. 训练 Diffusion-Suction 网络
+### 2. 构建 Parcel-Suction-Dataset
+在Windows环境下Blender中运行generate_dataset中的脚本生成数据集
+
+### 3. 训练 Diffusion-Suction 网络
 ```bash
 cd train\Sparepart\train.py
 python train.py 
@@ -70,7 +73,7 @@ python train.py
 
 ---
 
-### 3. 在自定义数据上评估
+### 4. 在自定义数据上评估
 
 - Parcel-Suction-Dataset 可在 [这里](https://drive.google.com/drive/folders/1l4jz7LE7HXdn2evylodggReTTnip7J1Q?usp=sharing) 下载。
 - SuctionNet-1Billion 可在 [这里](https://github.com/graspnet/suctionnetAPI) 获取。
