@@ -1,5 +1,5 @@
 [submodule "diffusion_suctionnet_model"]
 	path = thirdparty/suctionnetAPI
 	url = https://github.com/btsd321/diffusion_suctionnet_model
-    branch = btsd
+    branch = master
 
