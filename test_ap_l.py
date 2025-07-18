@@ -27,9 +27,9 @@ import json
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from diffusion_suctionnet_model.model import dsnet, load_checkpoint
-from diffusion_suctionnet_model.data.dataset_plus import DiffusionSuctionNetDataset
-from diffusion_suctionnet_model.data.pointcloud_transforms import PointCloudShuffle, ToTensor
+from .diffusion_suctionnet_model.model import dsnet, load_checkpoint
+from .diffusion_suctionnet_model.data.dataset_plus import DiffusionSuctionNetDataset
+from .diffusion_suctionnet_model.data.pointcloud_transforms import PointCloudShuffle, ToTensor
 from suction_nms import nms_suction
 
 # --------------------------------------------------------------------------------------------需要修改的参数
