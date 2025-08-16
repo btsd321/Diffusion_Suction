@@ -247,24 +247,24 @@ def train_one_epoch(loader, epoch, input):
         }
         input.logger.update_state_dict(log_state_dict)
 
-        if input.gpus_is:
-            if dist.get_rank() == 0:
-                if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
-                    print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
-                    input.logger.print_state_dict(log=False)
-                    # 额外打印梯度范数信息 (仅显示，不记录到日志)
-                    if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
-                        print(f"梯度范数: {total_norm:.6f}")
+        # if input.gpus_is:
+        #     if dist.get_rank() == 0:
+        #         if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
+        #             print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
+        #             input.logger.print_state_dict(log=False)
+        #             # 额外打印梯度范数信息 (仅显示，不记录到日志)
+        #             if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
+        #                 print(f"梯度范数: {total_norm:.6f}")
                 # if batch_idx == 2:
                 #     t = time.time() - start_time
                 #     print('Successfully train one batchsize in %f seconds.' % (t))
-        else:                                    
-            if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
-                print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
-                input.logger.print_state_dict(log=False)
-                # 额外打印梯度范数信息 (仅显示，不记录到日志)
-                if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
-                    print(f"梯度范数: {total_norm:.6f}")
+        # else:                                    
+        #     if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
+        #         print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
+        #         input.logger.print_state_dict(log=False)
+        #         # 额外打印梯度范数信息 (仅显示，不记录到日志)
+        #         if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
+        #             print(f"梯度范数: {total_norm:.6f}")
             # if batch_idx == 2:
             #     t = time.time() - start_time
             #     print('Successfully train one batchsize in %f seconds.' % (t))
