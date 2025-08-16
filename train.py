@@ -74,7 +74,7 @@ parser.add_argument('--output_dir', type=str, default='D:\\Project\\Diffusion_Su
 parser.add_argument('--checkpoint_path', type=str, default='', help='模型检查点路径')
 parser.add_argument('--device_list', type=str, default='0', help='训练设备GPU编号, 输入支持单数字如"0", 列表[0,2], "[1,10:2]"(带步长闭区间，冒号后面是步长), 集合{0,2,3}')
 parser.add_argument('--batch_size', type=int, default=4, help='训练的batch size - 增大以提高训练稳定性')
-parser.add_argument('--max_epoch', type=int, default=500, help='最大训练epoch')
+parser.add_argument('--max_epoch', type=int, default=200, help='最大训练epoch')
 parser.add_argument('--train_data_hold_epoch', type=int, default=3, help='一个cycle训练多少个epoch')
 parser.add_argument('--eval_stap', type=int, default=10, help='多少个epoch进行一次验证')
 parser.add_argument('--display_batch_step', type=int, default=20, help='每多少个batch打印一次loss - 减小以便更频繁监控')
@@ -415,7 +415,7 @@ def train_environment_init():
     input.logger = SimpleLogger(input.log_dir, FILE_PATH)
     
     # 创建 TensorBoard 日志目录（包含所有父目录）
-    SummaryWriter_log_dir = os.path.join(ROOT_DIR, 'logs', PROJECT_NAME, LOG_NAME, "tensorboard")
+    SummaryWriter_log_dir = os.path.join(input.log_dir, PROJECT_NAME, LOG_NAME, "tensorboard")
     os.makedirs(SummaryWriter_log_dir, exist_ok=True)
     
     try:
