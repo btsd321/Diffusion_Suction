@@ -151,6 +151,14 @@ class DiffusionSuctionNetTrainInput:
         # 时间戳
         timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
         self.output_dir = os.path.join(ARGS.output_dir, timestamp)
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+        self.log_dir = os.path.join(self.output_dir, 'log')
+        self.weights_dir = os.path.join(self.output_dir, 'weights')
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
+        if not os.path.exists(self.weights_dir):
+            os.makedirs(self.weights_dir)
         
         # 解析输入参数并验证
         try:
@@ -384,14 +392,13 @@ def train_environment_init():
     
     # ======================== 日志与Tensorboard初始化 ========================
     # 先创建日志目录
-    if not os.path.exists(input.output_dir):
-        os.makedirs(input.output_dir)
+    
     
     # 生成带时间戳的日志文件名
-    input.logger = SimpleLogger(input.output_dir, 'log', FILE_PATH, 'log_train.txt')
+    input.logger = SimpleLogger(input.log_dir, FILE_PATH, 'log_train.txt')
     
     # 创建 TensorBoard 日志目录（包含所有父目录）
-    SummaryWriter_log_dir = os.path.join(input.output_dir, 'log', PROJECT_NAME, LOG_NAME, "tensorboard")
+    SummaryWriter_log_dir = os.path.join(input.log_dir, PROJECT_NAME, LOG_NAME, "tensorboard")
     os.makedirs(SummaryWriter_log_dir, exist_ok=True)
     
     try:
@@ -621,11 +628,11 @@ def train(start_epoch, input=None):
             
             if loss < min_loss:
                 min_loss = loss
-                save_checkpoint(os.path.join(input.output_dir, 'checkpoint.tar'), epoch, input.net, input.optimizer, loss)
-                input.logger.log_string("Model saved in file: %s" % os.path.join(input.output_dir, 'checkpoint.tar'))
+                save_checkpoint(os.path.join(input.weights_dir, 'checkpoint.tar'), epoch, input.net, input.optimizer, loss)
+                input.logger.log_string("Model saved in file: %s" % os.path.join(input.weights_dir, 'checkpoint.tar'))
         
         if epoch % SAVE_STAP == 0 and epoch > 50:
-            save_checkpoint(os.path.join(input.output_dir, str(epoch)+'_'+'checkpoint.tar'), epoch, input.net, input.optimizer, min_loss)
+            save_checkpoint(os.path.join(input.weights_dir, str(epoch)+'_'+'checkpoint.tar'), epoch, input.net, input.optimizer, min_loss)
         
         # 计算并打印预计剩余时间
         epoch_end_time = time.time()
@@ -673,11 +680,11 @@ if __name__ == '__main__':
         if output.gpus_is:
             if dist.get_rank() == 0:
                 print('Saving model...')
-                save_checkpoint(os.path.join(output.output_dir, 'checkpoint.tar'), output.start_epoch, output.net, output.optimizer, 0)
-                output.logger.log_string("Model saved in file: %s" % os.path.join(output.output_dir, 'checkpoint.tar'))
+                save_checkpoint(os.path.join(output.weights_dir, 'checkpoint.tar'), output.start_epoch, output.net, output.optimizer, 0)
+                output.logger.log_string("Model saved in file: %s" % os.path.join(output.weights_dir, 'checkpoint.tar'))
         else:
             print('Saving model...')
-            save_checkpoint(os.path.join(output.output_dir, 'checkpoint.tar'), output.start_epoch, output.net, output.optimizer, 0)
-            output.logger.log_string("Model saved in file: %s" % os.path.join(output.output_dir, 'checkpoint.tar'))
+            save_checkpoint(os.path.join(output.weights_dir, 'checkpoint.tar'), output.start_epoch, output.net, output.optimizer, 0)
+            output.logger.log_string("Model saved in file: %s" % os.path.join(output.weights_dir, 'checkpoint.tar'))
     except Exception as e:
         print(f"训练过程出现错误: {e}")
