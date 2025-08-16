@@ -86,7 +86,6 @@ def test_model_forward():
             'point_clouds': torch.randn(batch_size, num_points, 3),
             'labels': {
                 'suction_or': torch.randn(batch_size, num_points, 3),
-                'suction_seal_scores': torch.randn(batch_size, num_points),
                 'suction_wrench_scores': torch.randn(batch_size, num_points),
                 'suction_feasibility_scores': torch.randn(batch_size, num_points),
                 'individual_object_size_lable': torch.randn(batch_size, num_points),

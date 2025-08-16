@@ -27,8 +27,6 @@ if __name__ == "__main__":
     model_list = suctionnet.loadObjTrimesh(object_ids)
 
     # 获取指定物体的密封标签(返回字典, key为物体ID, value为标签)
-    object_ids = [0, 1, 2]  # 指定你感兴趣的物体ID
-    seal_labels = suctionnet.loadSealLabels(object_ids)
 
     # 获取指定场景的扭矩标签(返回字典, key为场景ID, value为标签)
     scene_ids = [0, 1, 2]   # 指定你感兴趣的场景ID

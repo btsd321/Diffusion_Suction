@@ -36,8 +36,8 @@ from suction_nms import nms_suction
 OUTPUT_DIR = 'train_ok1'
 ROOT_DIR = "/opt/data/private/suctionnet-Packag/data_gen_for_package/diffusion_scution_net/sd-net-diff-main/good/train_ok1/logs/aaaa/train_ok1"
 CHECKPOINT_PATH = os.path.join(ROOT_DIR) + "/checkpoint.tar"
-TEST_CYCLE_RANGE = [990,992]  # 测试cycle编号范围(左闭右开)
-TEST_SCENE_RANGE = [1,51]     # 测试scene编号范围(左闭右开)
+TEST_CYCLE_RANGE = [0,90]       # 测试cycle编号范围(左闭右开)
+TEST_SCENE_RANGE = [1,51]       # 测试scene编号范围(左闭右开)
 DATASET_DIR = "/opt/data/private/suctionnet-Packag/data_gen_for_package_eval/h5_dataset/train"
 # --------------------------------------------------------------------------------------------需要修改的参数
 
@@ -82,7 +82,6 @@ def eval_one_epoch(loader):
         # 标签整理
         labels = {
             'suction_or': batch_samples['suction_or'].to(device),
-            'suction_seal_scores': batch_samples['suction_seal_scores'].to(device),
             'suction_wrench_scores': batch_samples['suction_wrench_scores'].to(device),
             'suction_feasibility_scores': batch_samples['suction_feasibility_scores'].to(device),
             'individual_object_size_lable': batch_samples['individual_object_size_lable'].to(device),
@@ -100,13 +99,12 @@ def eval_one_epoch(loader):
             print("Forward time:", time.time()-time_start)
 
             # 提取各分支预测分数
-            pred_suction_seal_scores = pred_results[0][:,0].cpu().numpy()
             pred_suction_wrench_scores = pred_results[0][:,1].cpu().numpy()
             pred_suction_feasibility_scores = pred_results[0][:,2].cpu().numpy()
             pred_individual_object_size_lable = pred_results[0][:,3].cpu().numpy()
             
             # 计算总分数(各分支分数相乘)
-            all_scroe = pred_suction_seal_scores * pred_suction_wrench_scores * pred_suction_feasibility_scores * pred_individual_object_size_lable
+            all_scroe = pred_suction_wrench_scores * pred_suction_feasibility_scores * pred_individual_object_size_lable
 
             # 组装吸取点信息(分数、法向量、点坐标)
             suction_points = input_points_with_noise[0].cpu().numpy()

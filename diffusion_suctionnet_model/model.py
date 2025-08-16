@@ -199,10 +199,10 @@ class dsnet(nn.Module):
         super().__init__()
         self.use_vis_branch = use_vis_branch
         self.loss_weights =  {
-            'suction_seal_scores_head': 50.0, 
-            'suction_wrench_scores_head': 50.0,
-            'suction_feasibility_scores_head': 50.0,
-            'individual_object_size_lable_head': 50.0,
+            'normal_flip_mask_head': 50.0,
+            'wrench_scores_head': 50.0,
+            'feasibility_scores_head': 50.0,
+            'visibility_scores_head': 50.0,
         }
         self.return_loss = return_loss
         self.pointnet_type = pointnet_type
@@ -275,14 +275,15 @@ class dsnet(nn.Module):
         
         # -----------------------------------------------------pointnet++提取堆叠场景点云
         input_points = inputs['point_clouds']  # torch.Size([4, 16384, 3])
-        input_points = torch.cat((input_points, inputs['labels']['suction_or']), dim=2)
+        input_points = torch.cat((input_points, inputs['labels']['normals']), dim=2)
         features, global_features = self.backbone(input_points)
 
         if self.return_loss:  # 训练模式, 计算损失
-            s1 = inputs['labels']['suction_seal_scores'].unsqueeze(-1)
-            s2 = inputs['labels']['suction_wrench_scores'].unsqueeze(-1)
-            s3 = inputs['labels']['suction_feasibility_scores'].unsqueeze(-1)
-            s4 = inputs['labels']['individual_object_size_lable'].unsqueeze(-1)
+            # TODO
+            s1 = inputs['labels']['normal_flip_mask'].unsqueeze(-1)
+            s2 = inputs['labels']['wrench_scores'].unsqueeze(-1)
+            s3 = inputs['labels']['feasibility_scores'].unsqueeze(-1)
+            s4 = inputs['labels']['visibility_scores'].unsqueeze(-1)
             gt = torch.cat((s1, s2, s3, s4), dim=2)
             
             pred_results = self.pipeline(   
@@ -294,10 +295,18 @@ class dsnet(nn.Module):
                 num_inference_steps=self.diffusion_inference_steps,
             )
 
-            # self-diff
-            # ddim_loss1 = self.ddim_loss(features, pred_results)
+            '''
+            ddim_loss1是通过扩散模型的“正向过程”计算的损失。
+            它会对真实标签 gt 加噪声，然后用模型去预测噪声，
+            最后用 MSE（均方误差）来衡量模型预测的噪声和真实噪声的差距。这个损失用于训练扩散模型本身。
+            '''
             ddim_loss1 = self.ddim_loss(features, gt)
 
+            '''
+            ddim_loss2是通过扩散模型的“反向过程”计算损失。
+            这是直接用模型采样出来的最终预测结果 pred_results 和真实标签 gt 之间的均方误差损失。
+            它衡量模型最终输出和真实标签的接近程度。
+            '''
             ddim_loss2 = F.mse_loss(pred_results, gt)
             ddim_loss = [ddim_loss1, ddim_loss2]
             
@@ -339,20 +348,21 @@ class dsnet(nn.Module):
         返回:
             losses: 各分支损失及总损失的字典
         """
-        batch_size, num_point = labels['suction_seal_scores'].shape[0:2]
-        suction_seal_scores_label_flatten = labels['suction_seal_scores'].view(batch_size * num_point)  # (B*N,)
-        suction_wrench_scores_flatten = labels['suction_wrench_scores'].view(batch_size * num_point)  # (B*N,)
-        suction_feasibility_scores_label_flatten = labels['suction_feasibility_scores'].view(batch_size * num_point)  # (B*N,)
-        individual_object_size_lable_flatten = labels['individual_object_size_lable'].view(batch_size * num_point)  # (B*N,)
+        # TODO
+        batch_size, num_point = labels['wrench_scores'].shape[0:2]
+        normal_flip_mask_flatten = labels['normal_flip_mask'].view(batch_size * num_point)  # (B*N,)
+        wrench_scores_flatten = labels['wrench_scores'].view(batch_size * num_point)  # (B*N,)
+        feasibility_scores_flatten = labels['feasibility_scores'].view(batch_size * num_point)  # (B*N,)
+        visibility_scores_flatten = labels['visibility_scores'].view(batch_size * num_point)  # (B*N,)
         
-        pred_suction_seal_scores, pred_suction_wrench_scores, pred_suction_feasibility_scores,pred_individual_object_size_lable = preds_flatten
+        pred_normal_flip_mask, pred_wrench_scores, pred_feasibility_scores, pred_visibility_scores = preds_flatten
         
         losses = dict()
-        losses['suction_seal_scores_head'] = self.visibility_loss(pred_suction_seal_scores, suction_seal_scores_label_flatten) * self.loss_weights['suction_seal_scores_head'] 
-        losses['suction_wrench_scores_head'] = self.visibility_loss(pred_suction_wrench_scores, suction_wrench_scores_flatten) * self.loss_weights['suction_wrench_scores_head'] 
-        losses['suction_feasibility_scores_head'] = self.visibility_loss(pred_suction_feasibility_scores, suction_feasibility_scores_label_flatten) * self.loss_weights['suction_feasibility_scores_head'] 
-        losses['individual_object_size_lable_head'] = self.visibility_loss(pred_individual_object_size_lable, individual_object_size_lable_flatten) * self.loss_weights['individual_object_size_lable_head'] 
-        losses['total'] = losses['suction_seal_scores_head'] + losses['suction_wrench_scores_head'] + losses['suction_feasibility_scores_head'] + losses['individual_object_size_lable_head'] 
+        losses['normal_flip_mask_head'] = self.visibility_loss(pred_normal_flip_mask, normal_flip_mask_flatten) * self.loss_weights['normal_flip_mask_head']
+        losses['wrench_scores_head'] = self.visibility_loss(pred_wrench_scores, wrench_scores_flatten) * self.loss_weights['wrench_scores_head'] 
+        losses['feasibility_scores_head'] = self.visibility_loss(pred_feasibility_scores, feasibility_scores_flatten) * self.loss_weights['feasibility_scores_head'] 
+        losses['visibility_scores_head'] = self.visibility_loss(pred_visibility_scores, visibility_scores_flatten) * self.loss_weights['visibility_scores_head'] 
+        losses['total'] = losses['normal_flip_mask_head'] + losses['wrench_scores_head'] + losses['feasibility_scores_head'] + losses['visibility_scores_head'] 
         
         return losses
 

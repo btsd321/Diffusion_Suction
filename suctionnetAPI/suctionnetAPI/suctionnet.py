@@ -1,7 +1,6 @@
 __author__ = 'hwcao'
 __version__ = '1.0'
 
-# TODO
 # check_data_completeness (wrench), showObjSuction, showSceneSuction, show6DPose, loadSuctionLabels, loadSuction
 
 # SuctionNet-1Billion数据集的访问接口。
@@ -143,11 +142,6 @@ class SuctionNet():
             if not os.path.exists(os.path.join(self.root, 'dense_point_clouds', '%03d.npz' % obj_id)):
                 error_flag = True
                 print('No Dense Point Cloud For Object {}'.format(obj_id))
-        # 检查密封标签
-        for obj_id in tqdm(range(88), 'Checking Seal Labels'):
-            if not os.path.exists(os.path.join(self.root, 'seal_label', '%03d_seal.npz' % obj_id)):
-                error_flag = True
-                print('No Seal Label For Object {}'.format(obj_id))
         # 检查抗扭矩标签
         for sceneId in tqdm(self.sceneIds, 'Checking Wrench Labels'):
             if not os.path.exists(os.path.join(self.root, 'wrench_label', '%04d_wrench.npz' % sceneId)):
@@ -298,25 +292,6 @@ class SuctionNet():
             plyfile = os.path.join(self.root, 'models','%03d' % i, 'nontextured.ply')
             models.append(trimesh.load(plyfile))
         return models
-
-    def loadSealLabels(self, objIds=None):
-        '''
-        加载指定物体ID的密封标签。
-
-        输入参数:
-        - objIds: int或int列表, 物体ID
-
-        输出:
-        - 每个物体的密封标签字典(points, normals, scores)
-        '''
-        objIds = self.objIds if objIds is None else objIds
-        assert _isArrayLike(objIds) or isinstance(objIds, int), 'objIds必须为整数或整数列表/numpy数组'
-        objIds = objIds if _isArrayLike(objIds) else [objIds]
-        graspLabels = {}
-        for i in tqdm(objIds, desc='Loading seal labels...'):
-            file = np.load(os.path.join(self.root, 'seal_label', '{}_seal.npz'.format(str(i).zfill(3))))
-            graspLabels[i] = (file['points'].astype(np.float32), file['normals'].astype(np.float32), file['scores'].astype(np.float32))
-        return graspLabels
 
     def loadWrenchLabels(self, sceneIds=None):
         '''
