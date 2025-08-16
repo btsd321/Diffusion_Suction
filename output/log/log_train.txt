@@ -1,6 +1,0 @@
-
-************** EPOCH 000 **************
-2025-08-16 21:47:18.923773
-Current learning rate: 0.003000 (scheduler: cosine)
-Current BN decay momentum: 0.500000
-----------------TRAIN STATUS---------------

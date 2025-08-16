@@ -108,18 +108,23 @@ class ScheduledCNNRefine(nn.Module):
         返回:
             ret: 去噪预测 (B, C_noise, N)
         """
-        if t.numel() == 1:
-            feat = feat + self.time_embedding(t)[..., None] # feat( n ,16384,128   )   time_embedding(t) (128) 
-        else:
-            feat = feat + self.time_embedding(t)[..., None,]
-        feat = feat + self.noise_embedding(noisy_image.permute(0, 2, 1))
+        try:
+            if t.numel() == 1:
+                feat = feat + self.time_embedding(t)[..., None] # feat( n ,16384,128   )   time_embedding(t) (128) 
+            else:
+                feat = feat + self.time_embedding(t)[..., None,]
+            
+            feat = feat + self.noise_embedding(noisy_image.permute(0, 2, 1))
 
-        feat = self.channelattention(feat)
-        feat = self.spatialattention(feat)
+            feat = self.channelattention(feat)
+            feat = self.spatialattention(feat)
 
-        ret = self.pred(feat)+noisy_image.permute(0, 2, 1)
+            ret = self.pred(feat)+noisy_image.permute(0, 2, 1)
 
-        return ret
+            return ret
+        except Exception as e:
+            print(e)
+            raise e
 
 class CNNDDIMPipiline:
     '''
