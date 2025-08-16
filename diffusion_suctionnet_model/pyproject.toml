@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "torch>=1.7.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffusion-suctionnet-model"
+dynamic = ["version"]
+description = "Diffusion SuctionNet Model - A PyTorch implementation for 6DoF suction grasping"
+authors = [
+    {name = "btsd321", email = ""},
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.6"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "torch>=1.7.0",
+    "torchvision>=0.8.0",
+    "numpy>=1.19.0",
+    "scipy>=1.5.0",
+    "tqdm>=4.50.0",
+    "h5py>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "flake8>=3.8",
+    "mypy>=0.800",
+]
+vis = [
+    "matplotlib>=3.3.0",
+    "opencv-python>=4.5.0",
+    "plyfile>=0.7.0",
+    "trimesh>=3.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/btsd321/diffusion_suctionnet_model"
+Documentation = "https://github.com/btsd321/diffusion_suctionnet_model/blob/main/README.md"
+Repository = "https://github.com/btsd321/diffusion_suctionnet_model"
+Issues = "https://github.com/btsd321/diffusion_suctionnet_model/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "diffusion_suctionnet_model._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["diffusion_suctionnet_model*"]
+
+[tool.setuptools.package-data]
+diffusion_suctionnet_model = [
+    "diffusers/schedulers/*.py",
+    "data/*.py",
+    "utils/*.py",
+    "pointnet2/*.py",
+    "pointnet2/_ext_src/src/*.cpp",
+    "pointnet2/_ext_src/src/*.cu",
+    "pointnet2/_ext_src/include/*.h",
+]

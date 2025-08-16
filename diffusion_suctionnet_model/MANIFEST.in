@@ -1,0 +1,24 @@
+# 包含文档和配置文件
+include README.md
+include LICENSE
+include requirements.txt
+include MANIFEST.in
+
+# 包含 PointNet2 CUDA 源代码
+recursive-include pointnet2/_ext_src/src *.cpp *.cu
+recursive-include pointnet2/_ext_src/include *.h
+recursive-include pointnet2 *.py
+
+# 包含其他模块
+recursive-include diffusers *.py
+recursive-include data *.py
+recursive-include utils *.py
+
+# 排除不必要的文件
+global-exclude *.pyc
+global-exclude __pycache__/*
+global-exclude .git/*
+global-exclude .gitignore
+global-exclude *.egg-info/*
+global-exclude build/*
+global-exclude dist/*
