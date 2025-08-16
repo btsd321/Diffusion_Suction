@@ -246,40 +246,15 @@ def train_one_epoch(loader, epoch, input):
             'grad_norm': total_norm,  # 每个batch都包含梯度范数
         }
         input.logger.update_state_dict(log_state_dict)
-
-        # if input.gpus_is:
-        #     if dist.get_rank() == 0:
-        #         if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
-        #             print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
-        #             input.logger.print_state_dict(log=False)
-        #             # 额外打印梯度范数信息 (仅显示，不记录到日志)
-        #             if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
-        #                 print(f"梯度范数: {total_norm:.6f}")
-                # if batch_idx == 2:
-                #     t = time.time() - start_time
-                #     print('Successfully train one batchsize in %f seconds.' % (t))
-        # else:                                    
-        #     if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
-        #         print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
-        #         input.logger.print_state_dict(log=False)
-        #         # 额外打印梯度范数信息 (仅显示，不记录到日志)
-        #         if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
-        #             print(f"梯度范数: {total_norm:.6f}")
-            # if batch_idx == 2:
-            #     t = time.time() - start_time
-            #     print('Successfully train one batchsize in %f seconds.' % (t))
-                #MAX_EPOCH*t* 1200 /BATCH_SIZE
         torch.cuda.empty_cache()  # 释放未使用显存
 
     if input.gpus_is:
         if dist.get_rank() == 0:
-            print('Current batch/total batch num: %d/%d'%(len(loader),len(loader)))
             input.logger.print_state_dict(log=True)
             loss_info = input.logger.return_state_dict()
             for i, (k, v) in enumerate(loss_info.items()):
                 input.writer.add_scalar(k, v, epoch)
     else:
-        print('Current batch/total batch num: %d/%d'%(len(loader),len(loader)))
         input.logger.print_state_dict(log=True)
         loss_info = input.logger.return_state_dict()
         for i, (k, v) in enumerate(loss_info.items()):
