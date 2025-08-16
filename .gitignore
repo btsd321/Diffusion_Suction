@@ -144,3 +144,5 @@ Data
 **/__pycache__/
 
 .vscode
+
+suction_nms.cpp # suction_nms包编译时生成的文件
