@@ -18,10 +18,10 @@ diffusion_model_path = os.path.join(FILE_DIR, "diffusion_suctionnet_model")
 sys.path.append(diffusion_model_path)
 
 # 打印路径用于调试
-print("当前工作目录:", os.getcwd())
-print("FILE_DIR:", FILE_DIR)
-print("添加的路径:", diffusion_model_path)
-print("sys.path:", sys.path[-3:])  # 打印最后添加的几个路径
+# print("当前工作目录:", os.getcwd())
+# print("FILE_DIR:", FILE_DIR)
+# print("添加的路径:", diffusion_model_path)
+# print("sys.path:", sys.path[-3:])  # 打印最后添加的几个路径
 
 # 其他导入...
 import math
@@ -169,9 +169,6 @@ class DiffusionSuctionNetTrainInput:
             utils.validate_range(self.test_cycle_range, "test_cycle_range")
             utils.validate_range(self.test_scene_range, "test_scene_range")
             
-            # 打印调试信息
-            print("=== 数据集配置信息 ===")
-            print(f"数据集根目录: {self.dataset_dir}")
             utils.print_range_info(self.train_cycle_range, self.train_scene_range, "训练集")
             utils.print_range_info(self.test_cycle_range, self.test_scene_range, "测试集")
             
@@ -198,8 +195,8 @@ def train_one_epoch(loader, epoch, input):
     input.net.train() 
     
     for batch_idx, batch_samples in enumerate(loader):
-        if batch_idx == 2:
-            start_time = time.time()
+        # if batch_idx == 2:
+        #     start_time = time.time()
         
         # ---------------------数据准备---------------------
         # 减小噪声强度，避免过度干扰训练
@@ -258,9 +255,9 @@ def train_one_epoch(loader, epoch, input):
                     # 额外打印梯度范数信息 (仅显示，不记录到日志)
                     if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
                         print(f"梯度范数: {total_norm:.6f}")
-                if batch_idx == 2:
-                    t = time.time() - start_time
-                    print('Successfully train one batchsize in %f seconds.' % (t))
+                # if batch_idx == 2:
+                #     t = time.time() - start_time
+                #     print('Successfully train one batchsize in %f seconds.' % (t))
         else:                                    
             if batch_idx % DISPLAY_BATCH_STEP == 0 and batch_idx!= 0:
                 print('Current batch/total batch num: %d/%d'%(batch_idx,len(loader)))
@@ -268,9 +265,9 @@ def train_one_epoch(loader, epoch, input):
                 # 额外打印梯度范数信息 (仅显示，不记录到日志)
                 if batch_idx % (DISPLAY_BATCH_STEP * 2) == 0:
                     print(f"梯度范数: {total_norm:.6f}")
-            if batch_idx == 2:
-                t = time.time() - start_time
-                print('Successfully train one batchsize in %f seconds.' % (t))
+            # if batch_idx == 2:
+            #     t = time.time() - start_time
+            #     print('Successfully train one batchsize in %f seconds.' % (t))
                 #MAX_EPOCH*t* 1200 /BATCH_SIZE
         torch.cuda.empty_cache()  # 释放未使用显存
 
@@ -364,7 +361,7 @@ def train_environment_init():
         
         for cycle_id in range(cycle_range[0], cycle_range[1]):
             cycle_dir = os.path.join(train_files_path, f'cycle_{cycle_id:04d}')
-            print(f"  检查 cycle_{cycle_id:04d}:")
+            # print(f"  检查 cycle_{cycle_id:04d}:")
             
             if not os.path.exists(cycle_dir):
                 print(f"    ❌ 目录不存在: {cycle_dir}")
@@ -374,7 +371,7 @@ def train_environment_init():
                 h5_file = os.path.join(cycle_dir, f'{scene_id:03d}.h5')
                 if os.path.exists(h5_file):
                     existing_files.append(h5_file)
-                    print(f"    ✓ {scene_id:03d}.h5")
+                    # print(f"    ✓ {scene_id:03d}.h5")
                 else:
                     missing_files.append(h5_file)
                     print(f"    ❌ {scene_id:03d}.h5 (不存在)")
@@ -572,7 +569,10 @@ def train(start_epoch, input=None):
         start_epoch: 训练起始epoch编号
     """
     min_loss = 1e10
-    for epoch in range(start_epoch, MAX_EPOCH): 
+    epoch_times = []  # 记录每个epoch的耗时
+    
+    for epoch in range(start_epoch, MAX_EPOCH):
+        epoch_start_time = time.time()  # 记录epoch开始时间 
         # ---------------------动态加载训练集---------------------
         if epoch%TRAIN_DATA_HOLD_EPOCH == 0 or input.train_dataset is None:
             cid = int(epoch/TRAIN_DATA_HOLD_EPOCH) % len(input.train_cycle_list)
@@ -610,28 +610,23 @@ def train(start_epoch, input=None):
         # ---------------------配置lr和bn参数---------------------
         input.bnm_scheduler.step(epoch) 
         
-        # 根据调度器类型选择不同的更新方式
-        if LR_SCHEDULER_TYPE == 'plateau':
-            # plateau调度器需要在验证后根据损失更新，这里先跳过
-            current_lr = input.optimizer.param_groups[0]['lr']
-        else:
-            # cosine 和 step 调度器可以直接更新
-            input.main_scheduler.step()
-            current_lr = input.main_scheduler.get_last_lr()[0]
-        
         if input.gpus_is:
             if dist.get_rank() == 0:
                 input.logger.log_string('************** EPOCH %03d **************' % (epoch))
                 input.logger.log_string(str(datetime.now()))
-                input.logger.log_string('Current learning rate: %f (scheduler: %s)' % (current_lr, LR_SCHEDULER_TYPE))
+                input.logger.log_string('Current learning rate: %f (scheduler: %s)' % (input.optimizer.param_groups[0]['lr'], LR_SCHEDULER_TYPE))
                 input.logger.log_string('Current BN decay momentum: %f'%(input.bnm_scheduler.get_bn_momentum(epoch)))
         else:
             input.logger.log_string('************** EPOCH %03d **************' % (epoch))
             input.logger.log_string(str(datetime.now()))
-            input.logger.log_string('Current learning rate: %f (scheduler: %s)' % (current_lr, LR_SCHEDULER_TYPE))
+            input.logger.log_string('Current learning rate: %f (scheduler: %s)' % (input.optimizer.param_groups[0]['lr'], LR_SCHEDULER_TYPE))
             input.logger.log_string('Current BN decay momentum: %f'%(input.bnm_scheduler.get_bn_momentum(epoch)))
         
         train_one_epoch(input.train_loader, epoch, input)
+        
+        # 在训练完一个epoch后更新学习率调度器（除了plateau类型）
+        if LR_SCHEDULER_TYPE != 'plateau':
+            input.main_scheduler.step()
         
         if epoch % EVAL_STAP == 0 and epoch > 50:
             loss = eval_one_epoch(input.test_loader, epoch, input)
@@ -639,12 +634,11 @@ def train(start_epoch, input=None):
             # 如果使用plateau调度器，根据验证损失更新学习率
             if LR_SCHEDULER_TYPE == 'plateau':
                 input.main_scheduler.step(loss)
-                current_lr = input.optimizer.param_groups[0]['lr']
                 if input.gpus_is:
                     if dist.get_rank() == 0:
-                        input.logger.log_string('Plateau scheduler updated, current lr: %f' % current_lr)
+                        input.logger.log_string('Plateau scheduler updated, current lr: %f' % input.optimizer.param_groups[0]['lr'])
                 else:
-                    input.logger.log_string('Plateau scheduler updated, current lr: %f' % current_lr)
+                    input.logger.log_string('Plateau scheduler updated, current lr: %f' % input.optimizer.param_groups[0]['lr'])
             
             if loss < min_loss:
                 min_loss = loss
@@ -653,6 +647,41 @@ def train(start_epoch, input=None):
         
         if epoch % SAVE_STAP == 0 and epoch > 50:
             save_checkpoint(os.path.join(input.log_dir, str(epoch)+'_'+'checkpoint.tar'), epoch, input.net, input.optimizer, min_loss)
+        
+        # 计算并打印预计剩余时间
+        epoch_end_time = time.time()
+        epoch_duration = epoch_end_time - epoch_start_time
+        epoch_times.append(epoch_duration)
+        
+        # 计算平均每个epoch耗时（取最近10个epoch的平均值，更准确）
+        recent_times = epoch_times[-10:] if len(epoch_times) >= 10 else epoch_times
+        avg_epoch_time = sum(recent_times) / len(recent_times)
+        
+        # 计算剩余时间
+        remaining_epochs = MAX_EPOCH - epoch - 1
+        estimated_remaining_time = remaining_epochs * avg_epoch_time
+        
+        # 格式化时间显示
+        def format_time(seconds):
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        
+        # 打印时间信息
+        if input.gpus_is:
+            if dist.get_rank() == 0:
+                print(f"Epoch {epoch} completed, duration: {format_time(epoch_duration)}")
+                print(f"Average epoch time: {format_time(avg_epoch_time)}")
+                print(f"Estimated remaining time: {format_time(estimated_remaining_time)} ({remaining_epochs} epochs left)")
+                print(f"Estimated completion time: {datetime.fromtimestamp(time.time() + estimated_remaining_time).strftime('%Y-%m-%d %H:%M:%S')}")
+                print("-" * 60)
+        else:
+            print(f"Epoch {epoch} completed, duration: {format_time(epoch_duration)}")
+            print(f"Average epoch time: {format_time(avg_epoch_time)}")
+            print(f"Estimated remaining time: {format_time(estimated_remaining_time)} ({remaining_epochs} epochs left)")
+            print(f"Estimated completion time: {datetime.fromtimestamp(time.time() + estimated_remaining_time).strftime('%Y-%m-%d %H:%M:%S')}")
+            print("-" * 60)
     
     print(f'训练的场景完成！！！！！！！！！！！！！')
 
