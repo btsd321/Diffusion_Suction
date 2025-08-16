@@ -409,7 +409,10 @@ def train_environment_init():
     # 先创建日志目录
     os.makedirs(input.log_dir, exist_ok=True)
     
-    input.logger = SimpleLogger(input.log_dir, FILE_PATH)
+    # 生成带时间戳的日志文件名
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f'log_train_{timestamp}.txt'
+    input.logger = SimpleLogger(input.log_dir, FILE_PATH, log_filename)
     
     # 创建 TensorBoard 日志目录（包含所有父目录）
     SummaryWriter_log_dir = os.path.join(input.log_dir, PROJECT_NAME, LOG_NAME, "tensorboard")

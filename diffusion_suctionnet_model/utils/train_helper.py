@@ -130,7 +130,7 @@ class SimpleLogger():
         log_dir: 日志保存目录
         file_path: 训练脚本路径(用于备份)
     """
-    def __init__(self, log_dir, file_path):
+    def __init__(self, log_dir, file_path, log_filename='log_train.txt'):
         if os.path.exists(log_dir):
             # 如果目录已存在, 可根据需要决定是否报错
             pass
@@ -138,7 +138,7 @@ class SimpleLogger():
             os.makedirs(log_dir)
  
         os.system('cp %s %s' % (file_path, log_dir)) # 备份训练脚本
-        self.log_file = open(os.path.join(log_dir, 'log_train.txt'), 'w')
+        self.log_file = open(os.path.join(log_dir, log_filename), 'w')
         self.log_file.write('\n')
         self.cnt = 0
         self.state_dict = OrderedDict()

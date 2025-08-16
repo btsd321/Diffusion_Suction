@@ -10,15 +10,16 @@ call ..\..\SoftWare\anaconda3\Scripts\activate.bat window_conda
 REM 运行训练脚本
 python train.py ^
   --data_dir "G:/Diffusion_Suction_DataSet/train" ^
-  --train_cycle_list "[0,79]" ^
+  --train_cycle_list "[10,89]" ^
   --train_scene_list "[1,50]" ^
-  --test_cycle_list "[80,89]" ^
+  --test_cycle_list "[0,9]" ^
   --test_scene_list "[1,50]" ^
   --output_dir "D:/Project/Diffusion_Suction/output" ^
   --device_list "0" ^
   --log_dir "D:/Project/Diffusion_Suction/output/log" ^
   --batch_size 8 ^
-  --base_learning_rate 0.003 ^
+  --base_learning_rate 0.0001 ^
+  --checkpoint_path "D:/Project/Diffusion_Suction/output/log/checkpoint.tar" ^
   --max_epoch 200
 
 pause
