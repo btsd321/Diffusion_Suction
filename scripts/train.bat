@@ -16,7 +16,6 @@ python train.py ^
   --test_scene_list "[1,50]" ^
   --output_dir "D:/Project/Diffusion_Suction/output" ^
   --device_list "0" ^
-  --log_dir "D:/Project/Diffusion_Suction/output/log" ^
   --batch_size 8 ^
   --base_learning_rate 0.0001 ^
   --checkpoint_path "D:/Project/Diffusion_Suction/output/log/checkpoint.tar" ^
