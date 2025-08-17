@@ -9,6 +9,8 @@ import yaml
 import json
 import torch
 import camera_info
+import OpenEXR
+import Imath
 # PointNet2操作库，用于点云采样
 from pointnet2_ops_lib.pointnet2_ops.pointnet2_utils import furthest_point_sample
 import open3d as o3d  # 3D几何处理
@@ -197,7 +199,17 @@ def filter_point_cloud(points, nb_points: int = 16, filter_radius: float = 0.01,
         dummy_normals[:, 2] = -1
         return points, dummy_normals, identity_mask
     
-    
+def _read_exr_to_numpy(exr_file_path):
+    exr_file = OpenEXR.InputFile(exr_file_path)
+    header = exr_file.header()
+    dw = header['dataWindow']
+    width = dw.max.x - dw.min.x + 1
+    height = dw.max.y - dw.min.y + 1
+    channels = ['R', 'G', 'B']
+    pt = Imath.PixelType(Imath.PixelType.FLOAT)
+    data = [np.frombuffer(exr_file.channel(c, pt), dtype=np.float32) for c in channels]
+    img = np.stack([d.reshape(height, width) for d in data], axis=-1)
+    return img
 def resample(points, normals, output_points_num=INPUT_TARGET_POINT_NUM):
     if not points.flags['C_CONTIGUOUS']:
         points = np.ascontiguousarray(points)
@@ -226,36 +238,27 @@ def resample(points, normals, output_points_num=INPUT_TARGET_POINT_NUM):
     except Exception as e:
         print(e)
         raise RuntimeError(f"点云重采样失败: {e}")
+    
+def point_cloud_generate(input):
+    rgb_img = None
+    depth_img = None
+    depth_scale = None
+    valid_mask = None
+    cam_info = None
+    params = None
+    z_threshold = None
+    try:
+        rgb_img = input["rgb_img"]
+        depth_img = input["depth_img"]
+        valid_mask = input["valid_mask"]
+        depth_scale = input["depth_scale"]
+        cam_info = input["camera_info"]
+        params = input["params"]
+        z_threshold = input["z_threshold"]
+    except Exception as e:
+        print(e)
+        raise RuntimeError(f"输入数据错误: {e}")
 
-def preprocess(input_rgb_path, input_depth_path, depth_scale, input_mask_path, camera_info_path, params_path=None, z_threshold=0.7):
-    if params_path is None:
-        params_path = default_params_path
-    # 读取RGB图像
-    rgb_img = cv2.imread(input_rgb_path)
-    # 读取深度图像
-    print(f'input_depth_path: {input_depth_path}')
-    depth_img = cv2.imread(input_depth_path, cv2.IMREAD_ANYDEPTH)
-    # 读取Mask图像，白色为物体，其他为背景
-    print(f'input_mask_path: {input_mask_path}')
-    mask_img = cv2.imread(input_mask_path, cv2.IMREAD_GRAYSCALE)
-    if mask_img is None:
-        raise FileNotFoundError(f"无法读取Mask图像: {input_mask_path}，请检查路径和文件格式是否正确！")
-    print(f'mask_img shape: {mask_img.shape}, dtype: {mask_img.dtype}')
-    # # 可视化mask
-    # cv2.imshow('Mask Image', mask_img)
-    # cv2.waitKey(0)
-    valid_mask = mask_img == 255   # 白色区域为物体
-    
-    # # 可视化valid_mask
-    # cv2.imshow('Valid Mask', valid_mask.astype(np.uint8) * 255)
-    # cv2.waitKey(0)
-    
-    # 读取相机信息
-    cam_info = camera_info.get_camera_info_from_yaml(camera_info_path)
-    
-    # 读取参数配置
-    params = _load_parameters(params_path)
-    
     # 生成点云及其法向量
     xs, ys = np.where(valid_mask)
     zs = depth_img[valid_mask]
@@ -310,6 +313,75 @@ def preprocess(input_rgb_path, input_depth_path, depth_scale, input_mask_path, c
     # 重采样到16384个点
     return resample(origin_points, origin_normals, output_points_num=INPUT_TARGET_POINT_NUM)
     
+def preprocess_scene(input_rgb_path, input_depth_path, depth_scale, input_mask_path, camera_info_path, params_path=None, z_threshold=0.7):
+    if params_path is None:
+        params_path = default_params_path
+    # 读取RGB图像
+    rgb_img = _read_exr_to_numpy(input_rgb_path)
+    # 读取深度图像
+    print(f'input_depth_path: {input_depth_path}')
+    depth_img = cv2.imread(input_depth_path, cv2.IMREAD_ANYDEPTH)
+    # 读取Mask图像，白色为物体，其他为背景
+    print(f'input_mask_path: {input_mask_path}')
+    mask_img = _read_exr_to_numpy(input_mask_path)
+    print(f'mask_img shape: {mask_img.shape}, dtype: {mask_img.dtype}')
+    # # 可视化mask
+    # cv2.imshow('Mask Image', mask_img)
+    # cv2.waitKey(0)
+    valid_mask = mask_img[:, :, 0] > 0.5   # 前景掩码
+    
+    # 读取相机信息
+    cam_info = camera_info.get_camera_info_from_yaml(camera_info_path)
+    
+    # 读取参数配置
+    params = _load_parameters(params_path)
+    
+    generator_input = {
+        "rgb_img": rgb_img,
+        "depth_img": depth_img,
+        "valid_mask": valid_mask,
+        "depth_scale": depth_scale,
+        "camera_info": cam_info,
+        "params": params,
+        "z_threshold": z_threshold
+    }
+    return point_cloud_generate(generator_input)
+    
+def preprocess_single_object(input_rgb_path, input_depth_path, depth_scale, input_mask_path, camera_info_path, params_path=None, z_threshold=0.7):
+    if params_path is None:
+        params_path = default_params_path
+    # 读取RGB图像
+    rgb_img = _read_exr_to_numpy(input_rgb_path)
+    # 读取深度图像
+    print(f'input_depth_path: {input_depth_path}')
+    depth_img = cv2.imread(input_depth_path, cv2.IMREAD_ANYDEPTH)
+    # 读取Mask图像，白色为物体，其他为背景
+    print(f'input_mask_path: {input_mask_path}')
+    mask_img = cv2.imread(input_mask_path, cv2.IMREAD_GRAYSCALE)
+    if mask_img is None:
+        raise FileNotFoundError(f"无法读取Mask图像: {input_mask_path}，请检查路径和文件格式是否正确！")
+    print(f'mask_img shape: {mask_img.shape}, dtype: {mask_img.dtype}')
+    # # 可视化mask
+    # cv2.imshow('Mask Image', mask_img)
+    # cv2.waitKey(0)
+    valid_mask = mask_img == 255   # 白色区域为物体
+    
+    # 读取相机信息
+    cam_info = camera_info.get_camera_info_from_yaml(camera_info_path)
+    
+    # 读取参数配置
+    params = _load_parameters(params_path)
+    
+    generator_input = {
+        "rgb_img": rgb_img,
+        "depth_img": depth_img,
+        "valid_mask": valid_mask,
+        "depth_scale": depth_scale,
+        "camera_info": cam_info,
+        "params": params,
+        "z_threshold": z_threshold
+    }
+    return point_cloud_generate(generator_input)
     
     
 

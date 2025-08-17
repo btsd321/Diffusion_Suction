@@ -27,14 +27,11 @@ print(f"项目根目录路径: {ROOT_DIR}")
 # 添加模块路径
 sys.path.append(ROOT_DIR)
 sys.path.append(FILE_DIR)  # 添加当前目录以导入 preprocess 模块
-thirdparty_path = os.path.join(ROOT_DIR, "thirdparty", "Diffusion_Suction")
-diffusion_model_path = os.path.join(ROOT_DIR, "thirdparty", "Diffusion_Suction", "diffusion_suctionnet_model")
-sys.path.append(thirdparty_path)
-sys.path.append(diffusion_model_path)
 
 try:
     from diffusion_suctionnet_model.model import dsnet
-    from preprocess import preprocess  # 导入预处理函数
+    from preprocess import preprocess_scene  # 导入预处理函数
+    from preprocess import preprocess_single_object  # 导入单物体预处理函数
     print("成功导入模型和工具函数")
 except ImportError as e:
     print(f"导入模块失败: {e}")
@@ -43,7 +40,8 @@ except ImportError as e:
         import sys
         sys.path.append(os.path.join(FILE_DIR, "thirdparty", "Diffusion_Suction", "diffusion_suctionnet_model"))
         from model import dsnet
-        from preprocess import preprocess  # 导入预处理函数
+        from preprocess import preprocess_scene  # 导入预处理函数
+        from preprocess import preprocess_single_object  # 导入单物体预处理函数
         print("成功从当前目录导入模型和工具函数")
     except ImportError as e2:
         print(f"从当前目录导入也失败: {e2}")
@@ -560,6 +558,7 @@ class SuctionNetInference:
     
     def get_best_suction_points(self, 
                                results: Dict[str, np.ndarray],
+                               composite_score, # 合成得分
                                preprocessed_point_cloud: np.ndarray,  # 使用预处理后的点云
                                preprocessed_normals: np.ndarray,  # 使用预处理后的法向量
                                top_k: int = 10) -> List[Dict]:
@@ -578,7 +577,6 @@ class SuctionNetInference:
 
         
         # 计算综合评分
-        composite_score = results['wrench_scores'] * results['feasibility_scores'] * results['visibility_scores']
         normal_flip_mask = results['normal_flip_mask'] > 0.5
         
         # 翻转向量（复制一份避免修改原数据）
@@ -805,7 +803,7 @@ def benchmark_model(inferencer, test_cases=5):
     print(f"{'='*60}")
 
 
-def load_data_from_images(rgb_path: str, depth_path: str, depth_scale: str, mask_path: str, camera_info_path: str, params_path: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray]:
+def load_data_from_files(rgb_path: str, depth_path: str, depth_scale: str, mask_path: str, mask_type:str, camera_info_path: str, params_path: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray]:
     """
     从RGB图像、深度图像、掩码图像和相机信息文件加载点云数据
     
@@ -834,12 +832,65 @@ def load_data_from_images(rgb_path: str, depth_path: str, depth_scale: str, mask
     
     # 使用预处理函数生成点云和法向量
     try:
-        point_cloud, normals = preprocess(rgb_path, depth_path, depth_scale, mask_path, camera_info_path, params_path)
+        if mask_type == 'single_object':
+            point_cloud, normals = preprocess_single_object(rgb_path, depth_path, depth_scale, mask_path, camera_info_path, params_path)
+        elif mask_type == 'scene':
+            point_cloud, normals = preprocess_scene(rgb_path, depth_path, depth_scale, mask_path, camera_info_path, params_path)
+        else:
+            raise ValueError(f"未知的 mask_type: {mask_type}")
         print(f"成功生成点云: {point_cloud.shape}, 法向量: {normals.shape}")
         return point_cloud, normals
     except Exception as e:
         raise RuntimeError(f"预处理失败: {e}")
+    
+def get_input_paths_with_scene(data_dir:str, cycle_id: int, scene_id: int):
+    rgb_path = os.path.join(
+        data_dir, 
+        "rgb_images",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        'Image0001.exr'
+    )
+    depth_path = os.path.join(
+        data_dir, 
+        "depth_images",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        'Image0001.png'
+    )
+    mask_path = os.path.join(
+        data_dir, 
+        "segment_images",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        'Image0001.exr'
+    )
+    return rgb_path, depth_path, mask_path
 
+def get_input_paths_with_single_object(data_dir: str, cycle_id: int, scene_id: int, object_id: int):
+    rgb_path = os.path.join(
+        data_dir, 
+        "rgb_images",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        'Image{:0>4}.exr'.format(object_id)
+    )
+    depth_path = os.path.join(
+        data_dir, 
+        "depth_images",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        'Image{:0>4}.png'.format(object_id)
+    )
+    mask_path = os.path.join(
+        data_dir, 
+        "segment_images_single",
+        'cycle_{:0>4}'.format(cycle_id), 
+        "{:0>3}".format(scene_id), 
+        "{:0>3}".format(scene_id) + "_{:0>3}".format(object_id),
+        'Image0001.png'
+    )
+    return rgb_path, depth_path, mask_path
 
 def main():
     """主函数 - 命令行推理接口"""
@@ -848,12 +899,24 @@ def main():
                        help='模型检查点文件路径')
     
     # 输入图像参数
-    parser.add_argument('--rgb', type=str, required=True,
+    parser.add_argument('--input_type', type=str, required=True, choices=['dataset', 'files'],
+                       help='输入类型: dataset（数据集目录）或 files（单个图像文件）')
+    parser.add_argument('--rgb', type=str, default=None,
                        help='RGB图像文件路径')
-    parser.add_argument('--depth', type=str, required=True,
+    parser.add_argument('--depth', type=str, default=None,
                        help='深度图像文件路径')
-    parser.add_argument('--mask', type=str, required=True,
+    parser.add_argument('--mask', type=str, default=None,
                        help='掩码图像文件路径')
+    parser.add_argument('--data_dir', type=str, default='G:/Diffusion_Suction_DataSet',
+                       help='数据集目录路径 (用于加载图像)')
+    parser.add_argument('--cycle_id', type=int, default=0, 
+                       help='循环编号')
+    parser.add_argument('--scene_id', type=int, default=0,
+                       help='场景编号')
+    parser.add_argument('--mask_type', type=str, required=True, choices=['single_object', 'scene'],
+                       help='模型目录路径 (用于保存模型)')
+    parser.add_argument('--mask_object_id', type=int, default=0,
+                       help='掩码对象ID (仅在mask_type为single_object时有效)')
     parser.add_argument('--camera_info', type=str, required=True,
                        help='相机信息文件路径')
     parser.add_argument('--params', type=str, 
@@ -875,6 +938,8 @@ def main():
                        help='运行基准测试')
     parser.add_argument('--benchmark_cases', type=int, default=5,
                        help='基准测试案例数量')
+    parser.add_argument('--visualize', action='store_true',
+                       help='可视化结果')
     try:
         args = parser.parse_args()
     except Exception as e:
@@ -895,10 +960,28 @@ def main():
         enable_profiling=args.enable_profiling
     )
     
+    rgb_path = None
+    depth_path = None
+    mask_path = None
+    mask_type = args.mask_type
+    if args.input_type == 'dataset':
+        if mask_type == "single_object":
+            rgb_path, depth_path, mask_path = get_input_paths_with_single_object(args.data_dir, args.cycle_id, args.scene_id, args.object_id)
+        elif mask_type == "scene":
+            rgb_path, depth_path, mask_path = get_input_paths_with_scene(args.data_dir, args.cycle_id, args.scene_id)
+        else:
+            raise ValueError(f"掩码类型 {mask_type} 不支持！")
+    elif args.input_type == 'files':
+        rgb_path = args.rgb
+        depth_path = args.depth
+        mask_path = args.mask
+    else:
+        raise ValueError(f"输入类型 {args.input_type} 不支持！")
+    
     # 从图像文件加载数据
     print(f"\n正在从图像文件加载数据...")
-    point_cloud, normals = load_data_from_images(
-        args.rgb, args.depth, args.depth_scale, args.mask, args.camera_info, args.params
+    point_cloud, normals = load_data_from_files(
+        rgb_path, depth_path, args.depth_scale, mask_path, mask_type, args.camera_info, args.params
     )
     
     # 执行推理
@@ -912,9 +995,33 @@ def main():
     
     # 获取最佳吸取点
     print(f"\n计算最佳吸取点...")
+    composite_score = results['wrench_scores'] * results['feasibility_scores'] * results['visibility_scores']
     best_points = inferencer.get_best_suction_points(
-        results, preprocessed_pc, preprocessed_normals
+        results, composite_score, preprocessed_pc, preprocessed_normals
     )
+    
+    # 翻转向量（复制一份避免修改原数据）
+    normal_flip_mask = results['normal_flip_mask'] > 0.5
+    flipped_normals = preprocessed_normals.copy()
+    flipped_normals[normal_flip_mask] = flipped_normals[normal_flip_mask] * -1
+    
+    visualize_data = {
+        "point_cloud": preprocessed_pc,
+        "normals": flipped_normals,
+        "composite_score": composite_score,
+        "wrench_score": results['wrench_scores'],
+        "feasibility_score": results['feasibility_scores'],
+        "visibility_score": results['visibility_scores'],
+        "best_points": best_points,
+    }
+    
+    if args.visualize:
+        print(f"\n可视化结果...")
+        from tools import result_visibility
+        result_visibility.visualize_results(visualize_data, 
+            score_type='wrench_score', 
+            show_best_points_num = 0
+        ) 
     
     # 简要总结最佳吸取点（详细信息已在get_best_suction_points中打印）
     if best_points:
