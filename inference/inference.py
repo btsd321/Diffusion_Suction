@@ -14,6 +14,8 @@ import gc
 from typing import Dict, List, Tuple, Optional
 import json
 from collections import defaultdict
+from suction_nms import nms_suction
+from preprocess import resample
 
 # 设置项目路径
 FILE_PATH = os.path.abspath(__file__)
@@ -254,7 +256,7 @@ class SuctionNetInference:
         print(f"输入点云形状: {point_cloud.shape}")
         print(f"输入法向量形状: {normals.shape}")
         
-        point_cloud, normals = preprocess.resample(point_cloud, normals, output_points_num=self.num_points)
+        point_cloud, normals = resample(point_cloud, normals, output_points_num=self.num_points)
         
         print(f"预处理后点云形状: {point_cloud.shape}")
         print(f"预处理后法向量形状: {normals.shape}")
@@ -317,6 +319,7 @@ class SuctionNetInference:
         
         # 获取预处理后的点云坐标（用于后续的最佳点定位）
         preprocessed_pc = inputs['point_clouds'].squeeze(0).cpu().numpy()  # (num_points, 3)
+        preprocessed_normals = inputs['labels']['normals'].squeeze(0).cpu().numpy()  # (num_points, 3)
         
         # 临时修改模型的pipeline调用，使用动态点数
         original_forward = self.model.forward
@@ -400,7 +403,7 @@ class SuctionNetInference:
         # 打印性能统计
         self._print_performance_stats(performance_stats)
         
-        return results, preprocessed_pc, performance_stats
+        return results, preprocessed_pc, preprocessed_normals, performance_stats
     
     def predict(self, point_cloud: np.ndarray, 
                 normals: Optional[np.ndarray] = None) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
@@ -427,6 +430,7 @@ class SuctionNetInference:
         
         # 获取预处理后的点云坐标（用于后续的最佳点定位）
         preprocessed_pc = inputs['point_clouds'].squeeze(0).cpu().numpy()  # (num_points, 3)
+        preprocessed_normals = inputs['labels']['normals'].squeeze(0).cpu().numpy()  # (num_points, 3)
         
         # 临时修改模型的pipeline调用，使用动态点数
         original_forward = self.model.forward
@@ -470,7 +474,7 @@ class SuctionNetInference:
         # 后处理结果
         results = self.postprocess_results(pred_results)
         
-        return results, preprocessed_pc
+        return results, preprocessed_pc, preprocessed_normals
     
     def _print_performance_stats(self, stats):
         """打印性能统计信息"""
@@ -542,10 +546,10 @@ class SuctionNetInference:
         print(f"各评分范围:")
         
         results = {
-            'suction_seal_scores': pred_results[:, 0],      # 密封评分
-            'suction_wrench_scores': pred_results[:, 1],    # 扭矩评分  
-            'suction_feasibility_scores': pred_results[:, 2], # 可行性评分
-            'object_size_scores': pred_results[:, 3]         # 物体尺寸评分
+            'normal_flip_mask': pred_results[:, 0],      # 密封评分
+            'wrench_scores': pred_results[:, 1],    # 扭矩评分  
+            'feasibility_scores': pred_results[:, 2], # 可行性评分
+            'visibility_scores': pred_results[:, 3]         # 物体尺寸评分
         }
         
         # 打印各评分的统计信息
@@ -557,8 +561,8 @@ class SuctionNetInference:
     def get_best_suction_points(self, 
                                results: Dict[str, np.ndarray],
                                preprocessed_point_cloud: np.ndarray,  # 使用预处理后的点云
-                               top_k: int = 10,
-                               score_weights: Optional[Dict[str, float]] = None) -> List[Dict]:
+                               preprocessed_normals: np.ndarray,  # 使用预处理后的法向量
+                               top_k: int = 10) -> List[Dict]:
         """
         获取最佳吸取点
         
@@ -571,36 +575,136 @@ class SuctionNetInference:
         返回:
             best_points: 最佳吸取点列表
         """
-        if score_weights is None:
-            score_weights = {
-                'suction_seal_scores': 0.3,
-                'suction_wrench_scores': 0.3,
-                'suction_feasibility_scores': 0.3,
-                'object_size_scores': 0.1
-            }
+
         
         # 计算综合评分
-        composite_score = np.zeros(len(results['suction_seal_scores']))
-        for score_name, weight in score_weights.items():
-            if score_name in results:
-                composite_score += weight * results[score_name]
+        composite_score = results['wrench_scores'] * results['feasibility_scores'] * results['visibility_scores']
+        normal_flip_mask = results['normal_flip_mask'] > 0.5
         
-        # 获取top-k索引
-        top_indices = np.argsort(composite_score)[-top_k:][::-1]
+        # 翻转向量（复制一份避免修改原数据）
+        flipped_normals = preprocessed_normals.copy()
+        flipped_normals[normal_flip_mask] = flipped_normals[normal_flip_mask] * -1
+        
+        # 构建包含所有信息的数据结构，用于NMS
+        # 数据格式: [composite_score, nx, ny, nz, x, y, z, wrench_score, feasibility_score, visibility_score, normal_flipped_flag]
+        suction_group = np.concatenate([
+            composite_score[..., np.newaxis],                      # [0] 综合评分
+            flipped_normals,                                       # [1:4] 法向量 (nx, ny, nz)
+            preprocessed_point_cloud,                              # [4:7] 位置 (x, y, z)
+            results['wrench_scores'][..., np.newaxis],            # [7] 扭矩评分
+            results['feasibility_scores'][..., np.newaxis],       # [8] 可行性评分
+            results['visibility_scores'][..., np.newaxis],        # [9] 可见性评分
+            normal_flip_mask.astype(np.float32)[..., np.newaxis]  # [10] 法向量是否翻转
+        ], axis=-1)
+        
+        print(f"NMS前吸取点数据形状: {suction_group.shape}")  # 应该是 (N, 11): [score, nx, ny, nz, x, y, z, wrench, feasibility, visibility, flipped]
+        
+        # 使用前7列进行NMS (只需要评分、法向量、位置信息)
+        suction_group_for_nms = suction_group[:, :7]
+        suction_group_nms = nms_suction(suction_group_for_nms, 0.02, 181.0 / 180 * np.pi)
+        
+        if len(suction_group_nms) == 0:
+            print("⚠️  NMS后没有剩余的吸取点")
+            return []
+        
+        # 将NMS结果转换为numpy数组，并找到对应的完整信息
+        nms_indices = []
+        for nms_point in suction_group_nms:
+            # 找到NMS结果中每个点在原始数据中的索引
+            distances = np.sum((suction_group[:, :7] - nms_point) ** 2, axis=1)
+            closest_idx = np.argmin(distances)
+            nms_indices.append(closest_idx)
+        
+        # 获取NMS后的完整数据 (包含所有原始评分)
+        suction_group_nms_full = suction_group[nms_indices]
+        print(f"吸取点NMS后数量: {suction_group_nms_full.shape[0]}")
+        
+        # 确保数据结构正确
+        if suction_group_nms_full.shape[1] != 11:
+            print(f"⚠️  NMS后数据结构异常: 期望11列，实际{suction_group_nms_full.shape[1]}列")
+            return []
+        
+        top_k = np.minimum(top_k, suction_group_nms_full.shape[0])
+        
+        # 确保评分列存在且有效
+        scores = suction_group_nms_full[:, 0]
+        if np.all(np.isnan(scores)) or np.all(scores <= 0):
+            print("⚠️  所有评分都无效或为零")
+            return []
+            
+        # 获取top-k索引 (按评分从高到低排序)
+        top_indices = np.argsort(scores)[-top_k:][::-1]
         
         best_points = []
+        
         for i, idx in enumerate(top_indices):
-            point_info = {
-                'rank': i + 1,
-                'index': int(idx),
-                'position': preprocessed_point_cloud[idx].tolist(),  # 使用预处理后的点云
-                'composite_score': float(composite_score[idx]),
-                'suction_seal_score': float(results['suction_seal_scores'][idx]),
-                'suction_wrench_score': float(results['suction_wrench_scores'][idx]),
-                'suction_feasibility_score': float(results['suction_feasibility_scores'][idx]),
-                'object_size_score': float(results['object_size_scores'][idx])
-            }
-            best_points.append(point_info)
+            try:
+                suction_data = suction_group_nms_full[idx]
+                
+                # 解析完整的数据结构: [score, nx, ny, nz, x, y, z, wrench, feasibility, visibility, flipped]
+                composite_score_val = suction_data[0]
+                normal = suction_data[1:4]  # [nx, ny, nz]
+                position = suction_data[4:7]  # [x, y, z]
+                wrench_score = suction_data[7]
+                feasibility_score = suction_data[8]
+                visibility_score = suction_data[9]
+                normal_flipped = bool(suction_data[10] > 0.5)
+                
+                # 验证数据有效性
+                if np.isnan(composite_score_val) or composite_score_val <= 0:
+                    print(f"跳过无效评分的点: {composite_score_val}")
+                    continue
+                    
+                if np.any(np.isnan(normal)) or np.any(np.isnan(position)):
+                    print(f"跳过含有NaN值的点")
+                    continue
+                
+                # 构建吸取点信息字典
+                point_info = {
+                    'rank': i + 1,                           # 排名 (1-based)
+                    'position': position.tolist(),           # 3D位置坐标 [x, y, z]
+                    'normal': normal.tolist(),               # 法向量 [nx, ny, nz]
+                    'composite_score': float(composite_score_val),  # 综合评分
+                    'original_scores': {                     # 原始各项评分 (直接从数据中获取)
+                        'wrench_score': float(wrench_score),
+                        'feasibility_score': float(feasibility_score),
+                        'visibility_score': float(visibility_score),
+                        'normal_flipped': normal_flipped
+                    },
+                    'quality_metrics': {
+                        'normal_magnitude': float(np.linalg.norm(normal)),    # 法向量模长
+                        'score_confidence': float(composite_score_val / (1.0 + np.std(scores)))  # 评分置信度
+                    }
+                }
+                
+                best_points.append(point_info)
+                
+            except Exception as e:
+                print(f"处理第{i+1}个吸取点时出错: {e}")
+                continue
+        
+        # 重新排序，确保按实际评分排序
+        best_points.sort(key=lambda x: x['composite_score'], reverse=True)
+        
+        # 更新排名
+        for i, point in enumerate(best_points):
+            point['rank'] = i + 1
+        
+        # 打印最佳吸取点信息
+        print(f"\n找到 {len(best_points)} 个最佳吸取点:")
+        for i, point in enumerate(best_points[:5]):  # 只打印前5个
+            print(f"  第{point['rank']}名:")
+            print(f"    位置: [{point['position'][0]:.4f}, {point['position'][1]:.4f}, {point['position'][2]:.4f}]")
+            print(f"    法向量: [{point['normal'][0]:.4f}, {point['normal'][1]:.4f}, {point['normal'][2]:.4f}]")
+            print(f"    综合评分: {point['composite_score']:.4f}")
+            print(f"    原始评分: 扭矩={point['original_scores']['wrench_score']:.3f}, "
+                  f"可行性={point['original_scores']['feasibility_score']:.3f}, "
+                  f"可见性={point['original_scores']['visibility_score']:.3f}")
+            print(f"    质量指标: 法向量模长={point['quality_metrics']['normal_magnitude']:.4f}, "
+                  f"评分置信度={point['quality_metrics']['score_confidence']:.4f}")
+            if i < len(best_points) - 1:
+                print()
+
         
         return best_points
     
@@ -804,25 +908,23 @@ def main():
     performance_stats = None
     
     if args.enable_profiling:
-        results, preprocessed_pc, performance_stats = inferencer.predict_with_profiling(point_cloud, normals)
+        results, preprocessed_pc, preprocessed_normals, performance_stats = inferencer.predict_with_profiling(point_cloud, normals)
     else:
-        results, preprocessed_pc = inferencer.predict(point_cloud, normals)
+        results, preprocessed_pc, preprocessed_normals = inferencer.predict(point_cloud, normals)
     
     # 获取最佳吸取点
     print(f"\n计算最佳吸取点 (top-{args.top_k})...")
     best_points = inferencer.get_best_suction_points(
-        results, preprocessed_pc, top_k=args.top_k
+        results, preprocessed_pc, preprocessed_normals, top_k=args.top_k
     )
     
-    # 打印最佳吸取点
-    print(f"\n最佳吸取点:")
-    for point in best_points[:5]:  # 只打印前5个
-        # 查找对应的点云位置
-        position = point['position']
-        index = np.argmin(np.sum((preprocessed_pc - position) ** 2, axis=1))
-        
-        print(f"  第{point['rank']}名: 位置{point['position']}, 序号{index}, "
-              f"综合评分: {point['composite_score']:.3f}")
+    # 简要总结最佳吸取点（详细信息已在get_best_suction_points中打印）
+    if best_points:
+        print(f"\n✅ 成功找到 {len(best_points)} 个最佳吸取点")
+        print(f"最高评分: {best_points[0]['composite_score']:.4f}")
+        print(f"最低评分: {best_points[-1]['composite_score']:.4f}")
+    else:
+        print(f"\n⚠️  未找到合适的吸取点")
     
     # 保存结果
     print(f"\n保存结果...")
