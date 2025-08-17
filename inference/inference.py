@@ -624,7 +624,7 @@ class SuctionNetInference:
             print(f"⚠️  NMS后数据结构异常: 期望11列，实际{suction_group_nms_full.shape[1]}列")
             return []
         
-        top_k = np.minimum(top_k, suction_group_nms_full.shape[0])
+        top_k = suction_group_nms_full.shape[0]
         
         # 确保评分列存在且有效
         scores = suction_group_nms_full[:, 0]
@@ -867,8 +867,6 @@ def main():
                        help='点云采样点数')
     parser.add_argument('--diffusion_steps', type=int, default=20,
                        help='扩散推理步数')
-    parser.add_argument('--top_k', type=int, default=10,
-                       help='返回前k个最佳吸取点')
     
     # 性能分析选项
     parser.add_argument('--enable_profiling', action='store_true',
@@ -913,9 +911,9 @@ def main():
         results, preprocessed_pc, preprocessed_normals = inferencer.predict(point_cloud, normals)
     
     # 获取最佳吸取点
-    print(f"\n计算最佳吸取点 (top-{args.top_k})...")
+    print(f"\n计算最佳吸取点...")
     best_points = inferencer.get_best_suction_points(
-        results, preprocessed_pc, preprocessed_normals, top_k=args.top_k
+        results, preprocessed_pc, preprocessed_normals
     )
     
     # 简要总结最佳吸取点（详细信息已在get_best_suction_points中打印）
