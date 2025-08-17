@@ -26,7 +26,7 @@ python train.py ^
   --test_scene_list "[1,50]" ^
   --output_dir "D:/Project/Diffusion_Suction/output" ^
   --device_list "0" ^
-  --batch_size 16 ^
+  --batch_size 8 ^
   --base_learning_rate 0.01 ^
   --max_epoch 500
 

@@ -148,4 +148,6 @@ Data
 suction_nms.cpp # suction_nms包编译时生成的文件
 
 logs
+input
 output
+inference_results_*
