@@ -257,6 +257,7 @@ def train_one_epoch(loader, epoch, input):
             'train loss2': losses[1].item(),
             'grad_norm': total_norm,  # 每个batch都包含梯度范数
         }
+        
         input.logger.update_state_dict(log_state_dict)
         torch.cuda.empty_cache()  # 释放未使用显存
 

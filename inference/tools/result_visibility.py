@@ -12,61 +12,61 @@ def configure_matplotlib_for_os():
     """根据操作系统配置matplotlib"""
     system = platform.system().lower()
     
-    print(f"检测到操作系统: {platform.system()} {platform.release()}")
+    # print(f"检测到操作系统: {platform.system()} {platform.release()}")
     
     if system == 'windows':
         # Windows环境配置
         try:
             matplotlib.use('TkAgg')
-            print("Windows: 使用TkAgg后端")
+            # print("Windows: 使用TkAgg后端")
         except ImportError:
             try:
                 matplotlib.use('Qt5Agg')
-                print("Windows: 使用Qt5Agg后端")
+                # print("Windows: 使用Qt5Agg后端")
             except ImportError:
                 matplotlib.use('Agg')
-                print("Windows: 使用Agg后端（无GUI）")
+                # print("Windows: 使用Agg后端（无GUI）")
                 
     elif system == 'linux':
         # Linux环境配置
         # 检测是否在WSL环境中
         is_wsl = "microsoft" in platform.uname().release.lower() or "WSL" in os.environ.get("WSL_DISTRO_NAME", "")
         if is_wsl:
-            print("检测到WSL环境")
+            # print("检测到WSL环境")
             matplotlib.use('Agg')  # WSL通常使用无GUI后端
-            print("WSL: 使用Agg后端（无GUI）")
+            # print("WSL: 使用Agg后端（无GUI）")
         else:
             # 标准Linux环境
             if os.environ.get('DISPLAY'):
                 try:
                     matplotlib.use('Qt5Agg')
-                    print("Linux: 使用Qt5Agg后端")
+                    # print("Linux: 使用Qt5Agg后端")
                 except ImportError:
                     try:
                         matplotlib.use('TkAgg')
-                        print("Linux: 使用TkAgg后端")
+                        # print("Linux: 使用TkAgg后端")
                     except ImportError:
                         matplotlib.use('Agg')
-                        print("Linux: 使用Agg后端（无GUI）")
+                        # print("Linux: 使用Agg后端（无GUI）")
             else:
                 matplotlib.use('Agg')
-                print("Linux: 无DISPLAY环境变量，使用Agg后端（无GUI）")
+                # print("Linux: 无DISPLAY环境变量，使用Agg后端（无GUI）")
                 
     elif system == 'darwin':  # macOS
         try:
             matplotlib.use('MacOSX')
-            print("macOS: 使用MacOSX后端")
+            # print("macOS: 使用MacOSX后端")
         except ImportError:
             try:
                 matplotlib.use('TkAgg')
-                print("macOS: 使用TkAgg后端")
+                # print("macOS: 使用TkAgg后端")
             except ImportError:
                 matplotlib.use('Agg')
-                print("macOS: 使用Agg后端（无GUI）")
+                # print("macOS: 使用Agg后端（无GUI）")
     else:
         # 其他系统
         matplotlib.use('Agg')
-        print(f"未知系统 {system}: 使用Agg后端（无GUI）")
+        # print(f"未知系统 {system}: 使用Agg后端（无GUI）")
 
 # 配置字体支持
 def configure_fonts_for_os():
@@ -77,19 +77,19 @@ def configure_fonts_for_os():
         # Windows中文字体配置
         fonts = ['Microsoft YaHei', 'SimHei', 'SimSun', 'KaiTi', 'FangSong']
         plt.rcParams['font.sans-serif'] = fonts + ['DejaVu Sans', 'Arial Unicode MS', 'sans-serif']
-        print("Windows: 配置中文字体 Microsoft YaHei, SimHei 等")
+        # print("Windows: 配置中文字体 Microsoft YaHei, SimHei 等")
         
     elif system == 'linux':
         # Linux中文字体配置
         fonts = ['WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Noto Sans CJK SC', 'Source Han Sans SC', 'SimHei']
         plt.rcParams['font.sans-serif'] = fonts + ['DejaVu Sans', 'Liberation Sans', 'sans-serif']
-        print("Linux: 配置中文字体 WenQuanYi, Noto Sans CJK SC 等")
+        # print("Linux: 配置中文字体 WenQuanYi, Noto Sans CJK SC 等")
         
     elif system == 'darwin':  # macOS
         # macOS中文字体配置
         fonts = ['PingFang SC', 'Heiti SC', 'STHeiti', 'Arial Unicode MS']
         plt.rcParams['font.sans-serif'] = fonts + ['Helvetica', 'sans-serif']
-        print("macOS: 配置中文字体 PingFang SC, Heiti SC 等")
+        # print("macOS: 配置中文字体 PingFang SC, Heiti SC 等")
     
     plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
     
@@ -104,7 +104,8 @@ def configure_fonts_for_os():
                 found_fonts.append(font)
         
         if found_fonts:
-            print(f"找到可用中文字体: {', '.join(found_fonts)}")
+            pass
+            # print(f"找到可用中文字体: {', '.join(found_fonts)}")
         else:
             print("⚠️  未找到合适的中文字体，可能存在中文显示问题")
             
@@ -184,7 +185,7 @@ def visualize_results(visualize_data, score_type='composite_score', show_best_po
     """
     try:
         # 显示环境信息
-        print_environment_info()
+        # print_environment_info()
         
         # 提取数据
         point_cloud = visualize_data["point_cloud"]

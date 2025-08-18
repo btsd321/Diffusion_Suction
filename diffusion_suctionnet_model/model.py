@@ -209,8 +209,11 @@ class dsnet(nn.Module):
             'feasibility_scores_head': 50.0,
             'visibility_scores_head': 50.0,
         }
+        self.bool_channels = [0, 2]  # normal_flip_mask, feasibility_scores
+        self.continuous_channels = [1, 3]  # wrench_scores, visibility_scores
         self.return_loss = return_loss
         self.pointnet_type = pointnet_type
+        self.debug_loss = True  # 启用调试模式，打印各个损失的数值
 
         backbone_config = {
             'npoint_per_layer': [4096,1024,256,64],
@@ -238,10 +241,11 @@ class dsnet(nn.Module):
     def ddim_loss(self, condit, gt,):
         """
         计算DDIM扩散模型的损失(MSE), 用于训练阶段。
+        针对混合数据类型（bool + 连续值）进行优化处理。
 
         参数:
             condit: 条件特征(如点云特征)
-            gt: 真实标签
+            gt: 真实标签 (B, N, 4) - [normal_flip_mask, wrench_scores, feasibility_scores, visibility_scores]
 
         返回:
             loss: 均方误差损失
@@ -250,10 +254,20 @@ class dsnet(nn.Module):
         noise = torch.randn(gt.shape).to(gt.device)
         bs = gt.shape[0]
 
-        gt_norm = (gt - 0.5) * 2 * self.bit_scale
+        # 分别处理不同类型的数据
+        gt_norm = gt.clone()
+
+        # Bool数据：0 -> -1, 1 -> 1
+        for ch in self.bool_channels:
+            gt_norm[:, :, ch] = (gt[:, :, ch] * 2 - 1) * self.bit_scale
+        
+        # 连续值数据：假设原本在[0,1]范围，映射到[-bit_scale, bit_scale]
+        for ch in self.continuous_channels:
+            gt_norm[:, :, ch] = (gt[:, :, ch] - 0.5) * 2 * self.bit_scale
 
         # 随机采样每个样本的时间步
         timesteps = torch.randint(0, self.scheduler.num_train_timesteps, (bs,), device=gt.device).long()
+        
         # 前向扩散过程, 添加噪声
         noisy_images = self.scheduler.add_noise(gt_norm, noise, timesteps)
 
@@ -275,6 +289,10 @@ class dsnet(nn.Module):
             pred_results: 推理结果或None
             ddim_loss: 损失(训练时返回, 否则为None)
         """
+        # 内存优化：清理CUDA缓存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
         batch_size = inputs['point_clouds'].shape[0]
         num_point = inputs['point_clouds'].shape[1]
         
@@ -282,14 +300,22 @@ class dsnet(nn.Module):
         input_points = inputs['point_clouds']  # torch.Size([4, 16384, 3])
         input_points = torch.cat((input_points, inputs['labels']['normals']), dim=2)
         features, global_features = self.backbone(input_points)
+        
+        # 释放不需要的变量
+        del input_points
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         if self.return_loss:  # 训练模式, 计算损失
-            # TODO
+            # 构建ground truth标签
             s1 = inputs['labels']['normal_flip_mask'].unsqueeze(-1)
             s2 = inputs['labels']['wrench_scores'].unsqueeze(-1)
             s3 = inputs['labels']['feasibility_scores'].unsqueeze(-1)
             s4 = inputs['labels']['visibility_scores'].unsqueeze(-1)
             gt = torch.cat((s1, s2, s3, s4), dim=2)
+            
+            # 释放临时变量
+            del s1, s2, s3, s4
             
             pred_results = self.pipeline(   
                 batch_size=batch_size,
@@ -300,22 +326,15 @@ class dsnet(nn.Module):
                 num_inference_steps=self.diffusion_inference_steps,
             )
 
-            '''
-            ddim_loss1是通过扩散模型的“正向过程”计算的损失。
-            它会对真实标签 gt 加噪声，然后用模型去预测噪声，
-            最后用 MSE（均方误差）来衡量模型预测的噪声和真实噪声的差距。这个损失用于训练扩散模型本身。
-            '''
-            ddim_loss1 = self.ddim_loss(features, gt)
-
-            '''
-            ddim_loss2是通过扩散模型的“反向过程”计算损失。
-            这是直接用模型采样出来的最终预测结果 pred_results 和真实标签 gt 之间的均方误差损失。
-            它衡量模型最终输出和真实标签的接近程度。
-            '''
-            ddim_loss2 = F.mse_loss(pred_results, gt)
-            ddim_loss = [ddim_loss1, ddim_loss2]
+            ddim_loss, loss_weight_list, loss2_weight_list = self._compute_loss(features, pred_results, gt)
             
+            # 训练模式：立即释放预测结果以节省内存
+            del pred_results
             pred_results = None
+            
+            # 强制清理CUDA缓存
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         else:  # 推理模式
             pred_results = self.pipeline(   
                 batch_size=batch_size,
@@ -342,34 +361,137 @@ class dsnet(nn.Module):
         loss = torch.mean( torch.abs(pred_vis - vis_label) )
         return loss
 
-    def _compute_loss(self, preds_flatten, labels):
+    def _compute_loss(self, features, predict_results, labels):
         """
-        计算各分支损失及总损失。
+        计算各分支损失及总损失，包含动态权重平衡策略。
 
         参数:
-            preds_flatten: 预测结果(各分支)
-            labels: 标签字典
+            features: 点云特征
+            predict_results: 预测结果 (B, N, 4) - [normal_flip_mask, wrench_scores, feasibility_scores, visibility_scores]
+            labels: 标签数据 (B, N, 4) - [normal_flip_mask, wrench_scores, feasibility_scores, visibility_scores]
 
         返回:
-            losses: 各分支损失及总损失的字典
+            losses: 各分支损失及总损失的列表 [ddim_loss1, ddim_loss2]，
+                   其中ddim_loss1和ddim_loss2已经按动态权重平衡
         """
-        # TODO
-        batch_size, num_point = labels['wrench_scores'].shape[0:2]
-        normal_flip_mask_flatten = labels['normal_flip_mask'].view(batch_size * num_point)  # (B*N,)
-        wrench_scores_flatten = labels['wrench_scores'].view(batch_size * num_point)  # (B*N,)
-        feasibility_scores_flatten = labels['feasibility_scores'].view(batch_size * num_point)  # (B*N,)
-        visibility_scores_flatten = labels['visibility_scores'].view(batch_size * num_point)  # (B*N,)
+        # 第一个损失：扩散模型训练损失
+        ddim_loss1 = self.ddim_loss(features, labels)
         
-        pred_normal_flip_mask, pred_wrench_scores, pred_feasibility_scores, pred_visibility_scores = preds_flatten
+        # 分离各个分支的预测结果和标签
+        pred_normal_flip_mask = predict_results[:, :, 0]      # bool类型预测
+        pred_wrench_scores = predict_results[:, :, 1]         # 连续值预测
+        pred_feasibility_scores = predict_results[:, :, 2]    # bool类型预测
+        pred_visibility_scores = predict_results[:, :, 3]     # 连续值预测
         
-        losses = dict()
-        losses['normal_flip_mask_head'] = self.visibility_loss(pred_normal_flip_mask, normal_flip_mask_flatten) * self.loss_weights['normal_flip_mask_head']
-        losses['wrench_scores_head'] = self.visibility_loss(pred_wrench_scores, wrench_scores_flatten) * self.loss_weights['wrench_scores_head'] 
-        losses['feasibility_scores_head'] = self.visibility_loss(pred_feasibility_scores, feasibility_scores_flatten) * self.loss_weights['feasibility_scores_head'] 
-        losses['visibility_scores_head'] = self.visibility_loss(pred_visibility_scores, visibility_scores_flatten) * self.loss_weights['visibility_scores_head'] 
-        losses['total'] = losses['normal_flip_mask_head'] + losses['wrench_scores_head'] + losses['feasibility_scores_head'] + losses['visibility_scores_head'] 
+        true_normal_flip_mask = labels[:, :, 0]               # bool类型真值
+        true_wrench_scores = labels[:, :, 1]                  # 连续值真值
+        true_feasibility_scores = labels[:, :, 2]             # bool类型真值
+        true_visibility_scores = labels[:, :, 3]              # 连续值真值
         
-        return losses
+        # 对于bool类型数据，使用BCE损失
+        normal_flip_mask_loss = F.binary_cross_entropy_with_logits(
+            pred_normal_flip_mask, true_normal_flip_mask.float()
+        )
+        feasibility_scores_loss = F.binary_cross_entropy_with_logits(
+            pred_feasibility_scores, true_feasibility_scores.float()
+        )
+        
+        # 对于连续值数据，使用MSE损失
+        wrench_scores_loss = F.mse_loss(pred_wrench_scores, true_wrench_scores)
+        visibility_scores_loss = F.mse_loss(pred_visibility_scores, true_visibility_scores)
+        
+        # 获取权重
+        normal_flip_mask_weight = self.loss_weights['normal_flip_mask_head']
+        wrench_scores_weight = self.loss_weights['wrench_scores_head']
+        feasibility_scores_weight = self.loss_weights['feasibility_scores_head']
+        visibility_scores_weight = self.loss_weights['visibility_scores_head']
+        
+        # 动态权重平衡策略 - 根据损失值自动调整权重
+        with torch.no_grad():
+            # 计算各损失的相对大小
+            losses_values = [
+                normal_flip_mask_loss.item(),
+                wrench_scores_loss.item(), 
+                feasibility_scores_loss.item(),
+                visibility_scores_loss.item()
+            ]
+            
+            # 找到最大损失作为基准
+            max_loss = max(losses_values)
+            
+            # 计算动态缩放因子，让所有损失在相似的数量级
+            normal_scale = max_loss / (normal_flip_mask_loss.item() + 1e-8)
+            wrench_scale = max_loss / (wrench_scores_loss.item() + 1e-8)
+            feasibility_scale = max_loss / (feasibility_scores_loss.item() + 1e-8)
+            visibility_scale = max_loss / (visibility_scores_loss.item() + 1e-8)
+            
+            # 限制缩放因子的范围，避免过度放大
+            normal_scale = min(normal_scale, 20.0)
+            wrench_scale = min(wrench_scale, 20.0)  
+            feasibility_scale = min(feasibility_scale, 20.0)
+            visibility_scale = min(visibility_scale, 20.0)
+        
+        # 加权组合损失 - 使用动态权重
+        all_weights = (normal_flip_mask_weight * normal_scale + 
+                         wrench_scores_weight * wrench_scale +
+                         feasibility_scores_weight * feasibility_scale + 
+                         visibility_scores_weight * visibility_scale)
+        normal_flip_mask_final_weight = normal_flip_mask_weight * normal_scale / all_weights
+        wrench_scores_final_weight = wrench_scores_weight * wrench_scale / all_weights
+        feasibility_scores_final_weight = feasibility_scores_weight * feasibility_scale / all_weights
+        visibility_scores_final_weight = visibility_scores_weight * visibility_scale / all_weights
+        ddim_loss2 = (normal_flip_mask_loss * normal_flip_mask_final_weight +
+                      wrench_scores_loss * wrench_scores_final_weight +
+                      feasibility_scores_loss * feasibility_scores_final_weight +
+                      visibility_scores_loss * visibility_scores_final_weight)
+        loss2_weight_list = [normal_flip_mask_final_weight, wrench_scores_final_weight, 
+                            feasibility_scores_final_weight, visibility_scores_final_weight]
+        
+        # Loss1和Loss2之间的动态权重平衡策略
+        loss1_val = ddim_loss1.item()
+        loss2_val = ddim_loss2.item()
+        
+        # 计算动态权重，让两个损失在相似的贡献度
+        if loss1_val > 0 and loss2_val > 0:
+            # 使用指数移动平均来稳定权重计算
+            if not hasattr(self, 'loss1_ema'):
+                self.loss1_ema = loss1_val
+                self.loss2_ema = loss2_val
+            else:
+                self.loss1_ema = 0.9 * self.loss1_ema + 0.1 * loss1_val
+                self.loss2_ema = 0.9 * self.loss2_ema + 0.1 * loss2_val
+            
+            # 计算平衡权重
+            total_ema = self.loss1_ema + self.loss2_ema
+            loss1_weight = total_ema / (2 * self.loss1_ema + 1e-8)  # 扩散损失权重
+            loss2_weight = total_ema / (2 * self.loss2_ema + 1e-8)  # 重建损失权重
+            
+            # 限制权重范围，避免过度调整
+            loss1_weight = max(0.5, min(3.0, loss1_weight))
+            loss2_weight = max(0.5, min(3.0, loss2_weight))
+        else:
+            loss1_weight = 1.0
+            loss2_weight = 1.0
+        
+        # 应用主损失权重
+        ddim_loss1_weighted = loss1_weight * ddim_loss1
+        ddim_loss2_weighted = loss2_weight * ddim_loss2
+        
+        # 调试信息输出
+        if hasattr(self, 'debug_loss') and self.debug_loss:
+            print(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
+                  f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
+                  f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
+                  f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
+            print(f"Combined Loss2: {ddim_loss2.item():.4f}")
+            
+            # 主损失权重信息
+            if hasattr(self, 'loss1_ema') and hasattr(self, 'loss2_ema'):
+                print(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
+                      f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
+        loss_weight_list = [loss1_weight, loss2_weight]
+        losses = [ddim_loss1_weighted, ddim_loss2_weighted]
+        return losses, loss_weight_list, loss2_weight_list
 
     def _build_head(self, nchannels):
         """

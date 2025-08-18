@@ -27,8 +27,8 @@ python train.py ^
   --output_dir "D:/Project/Diffusion_Suction/output" ^
   --device_list "0" ^
   --batch_size 8 ^
-  --base_learning_rate 0.01 ^
-  --max_epoch 500
+  --base_learning_rate 0.001 ^
+  --max_epoch 200
 
 @REM python train.py ^
 @REM   --data_dir "G:/Diffusion_Suction_DataSet/train" ^
