@@ -89,6 +89,8 @@ parser.add_argument('--bn_momentum_init', type=float, default=0.5, help='BN动�
 parser.add_argument('--bn_momentum_min', type=float, default=0.001, help='BN动量最小值')
 parser.add_argument('--bn_decay_step', type=int, default=80, help='BN动量衰减步长')
 parser.add_argument('--bn_decay_rate', type=float, default=0.5, help='BN动量衰减率')
+parser.add_argument('--noise_start', type=float, default=0.005, help='噪声起始值，单位: m')
+parser.add_argument('--noise_end', type=float, default=0.002, help='噪声结束值, 单位: m')
 ARGS = parser.parse_args()
 
 
@@ -208,10 +210,11 @@ def train_one_epoch(loader, epoch, input):
         #     start_time = time.time()
         
         # ---------------------数据准备---------------------
-        # 减小噪声强度，避免过度干扰训练
+        # 使用自适应噪声调度，随训练进行逐渐减小噪声强度
+        noise_factor = max(input.noise_start * (1 - epoch / MAX_EPOCH) + input.noise_end * (epoch / MAX_EPOCH), input.noise_end)
         xyz_noise = torch.from_numpy(np.random.standard_normal(batch_samples['points'].shape)).float()
-        # 降低噪声系数从2.0到0.5，减少对原始数据的干扰
-        input_points_with_noise = batch_samples['points'] + xyz_noise * 0.5
+        # 使用自适应噪声强度
+        input_points_with_noise = batch_samples['points'] + xyz_noise * noise_factor
         labels = {
             'normals': batch_samples['normals'].to(input.device),
             'normal_flip_mask': batch_samples['normal_flip_mask'].to(input.device),
@@ -544,6 +547,9 @@ def train_environment_init():
         raise
     
     input.train_dataset = None
+    input.noise_start = ARGS.noise_start  # 初始噪声强度
+    input.noise_end = ARGS.noise_end  # 结束噪声强度
+
     return input
     
 

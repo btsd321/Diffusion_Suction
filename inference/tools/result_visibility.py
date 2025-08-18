@@ -171,7 +171,7 @@ visualize_data = {
 
 
 def visualize_results(visualize_data, score_type='composite_score', show_best_points_num=1, 
-                     best_point_size=0.2, save_path=None):
+                     best_point_size=8, save_path=None):
     """
     可视化推理结果（使用matplotlib）
     
@@ -217,7 +217,7 @@ def visualize_results(visualize_data, score_type='composite_score', show_best_po
         
         # 绘制点云，使用评分进行颜色映射
         scatter = ax.scatter(point_cloud[:, 0], point_cloud[:, 1], point_cloud[:, 2], 
-                           c=scores, cmap='coolwarm', s=20, alpha=0.6)
+                           c=scores, cmap='coolwarm', s=4, alpha=0.8)
         
         # 添加颜色条
         cbar = plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=5)
