@@ -237,6 +237,16 @@ class dsnet(nn.Module):
 
         self.pipeline = CNNDDIMPipiline(self.model, self.scheduler)
         self.bit_scale = 0.5
+        self.logger = None
+        
+    def set_logger(self, logger):
+        """
+        设置日志记录器, 用于训练过程中的日志输出。
+
+        参数:
+            logger: 日志记录器实例
+        """
+        self.logger = logger
 
     def ddim_loss(self, condit, gt,):
         """
@@ -479,16 +489,27 @@ class dsnet(nn.Module):
         
         # 调试信息输出
         if hasattr(self, 'debug_loss') and self.debug_loss:
-            print(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
-                  f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
-                  f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
-                  f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
-            print(f"Combined Loss2: {ddim_loss2.item():.4f}")
+            if self.logger is None:
+                print(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
+                    f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
+                    f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
+                    f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
+                print(f"Combined Loss2: {ddim_loss2.item():.4f}")
+            else:
+                self.logger.log_string(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
+                    f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
+                    f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
+                    f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
+                self.logger.log_string(f"Combined Loss2: {ddim_loss2.item():.4f}")
             
             # 主损失权重信息
             if hasattr(self, 'loss1_ema') and hasattr(self, 'loss2_ema'):
-                print(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
-                      f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
+                if self.logger is None:
+                    print(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
+                        f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
+                else:
+                    self.logger.log_string(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
+                        f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
         loss_weight_list = [loss1_weight, loss2_weight]
         losses = [ddim_loss1_weighted, ddim_loss2_weighted]
         return losses, loss_weight_list, loss2_weight_list
