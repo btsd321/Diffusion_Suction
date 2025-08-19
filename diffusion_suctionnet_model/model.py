@@ -267,7 +267,7 @@ class dsnet(nn.Module):
         # 分别处理不同类型的数据
         gt_norm = gt.clone()
 
-        # Bool数据：0 -> -1, 1 -> 1
+        # Bool数据：0 -> -bit_scale, 1 -> bit_scale
         for ch in self.bool_channels:
             gt_norm[:, :, ch] = (gt[:, :, ch] * 2 - 1) * self.bit_scale
         
@@ -386,76 +386,48 @@ class dsnet(nn.Module):
         """
         # 第一个损失：扩散模型训练损失
         ddim_loss1 = self.ddim_loss(features, labels)
+
+        # 初始化每个通道的损失
+        all_channel_loss = [0.0, 0.0, 0.0, 0.0]
         
-        # 分离各个分支的预测结果和标签
-        pred_normal_flip_mask = predict_results[:, :, 0]      # bool类型预测
-        pred_wrench_scores = predict_results[:, :, 1]         # 连续值预测
-        pred_feasibility_scores = predict_results[:, :, 2]    # bool类型预测
-        pred_visibility_scores = predict_results[:, :, 3]     # 连续值预测
-        
-        true_normal_flip_mask = labels[:, :, 0]               # bool类型真值
-        true_wrench_scores = labels[:, :, 1]                  # 连续值真值
-        true_feasibility_scores = labels[:, :, 2]             # bool类型真值
-        true_visibility_scores = labels[:, :, 3]              # 连续值真值
-        
-        # 对于bool类型数据，使用BCE损失
-        normal_flip_mask_loss = F.binary_cross_entropy_with_logits(
-            pred_normal_flip_mask, true_normal_flip_mask.float()
-        )
-        feasibility_scores_loss = F.binary_cross_entropy_with_logits(
-            pred_feasibility_scores, true_feasibility_scores.float()
-        )
-        
-        # 对于连续值数据，使用MSE损失
-        wrench_scores_loss = F.mse_loss(pred_wrench_scores, true_wrench_scores)
-        visibility_scores_loss = F.mse_loss(pred_visibility_scores, true_visibility_scores)
-        
-        # 获取权重
-        normal_flip_mask_weight = self.loss_weights['normal_flip_mask_head']
-        wrench_scores_weight = self.loss_weights['wrench_scores_head']
-        feasibility_scores_weight = self.loss_weights['feasibility_scores_head']
-        visibility_scores_weight = self.loss_weights['visibility_scores_head']
+        # 为每个bool类型通道单独计算损失
+        for i, ch in enumerate(self.bool_channels):
+            pred_single = predict_results[:, :, ch]
+            true_single = labels[:, :, ch].float()
+            all_channel_loss[ch] = F.binary_cross_entropy_with_logits(pred_single, true_single)
+            
+        # 为每个连续值通道单独计算损失
+        for i, ch in enumerate(self.continuous_channels):
+            pred_single = predict_results[:, :, ch]
+            true_single = labels[:, :, ch]
+            # 归一化标签到[-bit_scale, bit_scale]
+            normed_true = (true_single - 0.5) * 2 * self.bit_scale
+            all_channel_loss[ch] = F.mse_loss(pred_single, normed_true)
+
+        # 计算加权损失
+        weight_sum = self.loss_weights['normal_flip_mask_head'] + \
+                      self.loss_weights['wrench_scores_head'] + \
+                      self.loss_weights['feasibility_scores_head'] + \
+                      self.loss_weights['visibility_scores_head']
+        channel_weights = [
+            self.loss_weights['normal_flip_mask_head'] / weight_sum,    # 通道0
+            self.loss_weights['wrench_scores_head'] / weight_sum,       # 通道1
+            self.loss_weights['feasibility_scores_head'] / weight_sum,  # 通道2
+            self.loss_weights['visibility_scores_head'] / weight_sum    # 通道3
+        ]
         
         # 动态权重平衡策略 - 根据损失值自动调整权重
         with torch.no_grad():
             # 计算各损失的相对大小
-            losses_values = [
-                normal_flip_mask_loss.item(),
-                wrench_scores_loss.item(), 
-                feasibility_scores_loss.item(),
-                visibility_scores_loss.item()
-            ]
-            
+            losses_values = [loss.item() if hasattr(loss, 'item') else loss for loss in all_channel_loss]
             # 找到最大损失作为基准
             max_loss = max(losses_values)
-            
             # 计算动态缩放因子，让所有损失在相似的数量级
-            normal_scale = max_loss / (normal_flip_mask_loss.item() + 1e-8)
-            wrench_scale = max_loss / (wrench_scores_loss.item() + 1e-8)
-            feasibility_scale = max_loss / (feasibility_scores_loss.item() + 1e-8)
-            visibility_scale = max_loss / (visibility_scores_loss.item() + 1e-8)
-            
+            dynamic_scale_factors = [max_loss / (loss + 1e-8) for loss in losses_values]
             # 限制缩放因子的范围，避免过度放大
-            normal_scale = min(normal_scale, 20.0)
-            wrench_scale = min(wrench_scale, 20.0)  
-            feasibility_scale = min(feasibility_scale, 20.0)
-            visibility_scale = min(visibility_scale, 20.0)
-        
+            dynamic_scale_factors = [min(scale, 20.0) for scale in dynamic_scale_factors]
         # 加权组合损失 - 使用动态权重
-        all_weights = (normal_flip_mask_weight * normal_scale + 
-                         wrench_scores_weight * wrench_scale +
-                         feasibility_scores_weight * feasibility_scale + 
-                         visibility_scores_weight * visibility_scale)
-        normal_flip_mask_final_weight = normal_flip_mask_weight * normal_scale / all_weights
-        wrench_scores_final_weight = wrench_scores_weight * wrench_scale / all_weights
-        feasibility_scores_final_weight = feasibility_scores_weight * feasibility_scale / all_weights
-        visibility_scores_final_weight = visibility_scores_weight * visibility_scale / all_weights
-        ddim_loss2 = (normal_flip_mask_loss * normal_flip_mask_final_weight +
-                      wrench_scores_loss * wrench_scores_final_weight +
-                      feasibility_scores_loss * feasibility_scores_final_weight +
-                      visibility_scores_loss * visibility_scores_final_weight)
-        loss2_weight_list = [normal_flip_mask_final_weight, wrench_scores_final_weight, 
-                            feasibility_scores_final_weight, visibility_scores_final_weight]
+        ddim_loss2 = sum(loss * weight * scale for loss, weight, scale in zip(all_channel_loss, channel_weights, dynamic_scale_factors)) / sum(weight * scale for weight, scale in zip(channel_weights, dynamic_scale_factors))
         
         # Loss1和Loss2之间的动态权重平衡策略
         loss1_val = ddim_loss1.item()
@@ -489,18 +461,26 @@ class dsnet(nn.Module):
         
         # 调试信息输出
         if hasattr(self, 'debug_loss') and self.debug_loss:
+            loss_info = {
+                'normal_flip_mask_loss': all_channel_loss[0].item() if hasattr(all_channel_loss[0], 'item') else all_channel_loss[0],
+                'wrench_scores_loss': all_channel_loss[1].item() if hasattr(all_channel_loss[1], 'item') else all_channel_loss[1],
+                'feasibility_scores_loss': all_channel_loss[2].item() if hasattr(all_channel_loss[2], 'item') else all_channel_loss[2],
+                'visibility_scores_loss': all_channel_loss[3].item() if hasattr(all_channel_loss[3], 'item') else all_channel_loss[3],
+                'ddim_loss2': ddim_loss2.item() if hasattr(ddim_loss2, 'item') else ddim_loss2
+            }
+            
             if self.logger is None:
-                print(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
-                    f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
-                    f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
-                    f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
-                print(f"Combined Loss2: {ddim_loss2.item():.4f}")
+                print(f"Individual losses - Normal(BCE): {loss_info['normal_flip_mask_loss']:.4f}, "
+                      f"Wrench(MSE): {loss_info['wrench_scores_loss']:.4f}, "
+                      f"Feasibility(BCE): {loss_info['feasibility_scores_loss']:.4f}, "
+                      f"Visibility(MSE): {loss_info['visibility_scores_loss']:.4f}")
+                print(f"Combined Loss2: {loss_info['ddim_loss2']:.4f}")
             else:
-                self.logger.log_string(f"Individual losses - Normal(BCE): {normal_flip_mask_loss.item():.4f} (scale: {normal_scale:.2f}), "
-                    f"Wrench(MSE): {wrench_scores_loss.item():.4f} (scale: {wrench_scale:.2f}), "
-                    f"Feasibility(BCE): {feasibility_scores_loss.item():.4f} (scale: {feasibility_scale:.2f}), "
-                    f"Visibility(MSE): {visibility_scores_loss.item():.4f} (scale: {visibility_scale:.2f})")
-                self.logger.log_string(f"Combined Loss2: {ddim_loss2.item():.4f}")
+                self.logger.log_string(f"Individual losses - Normal(BCE): {loss_info['normal_flip_mask_loss']:.4f}, "
+                                      f"Wrench(MSE): {loss_info['wrench_scores_loss']:.4f}, "
+                                      f"Feasibility(BCE): {loss_info['feasibility_scores_loss']:.4f}, "
+                                      f"Visibility(MSE): {loss_info['visibility_scores_loss']:.4f}")
+                self.logger.log_string(f"Combined Loss2: {loss_info['ddim_loss2']:.4f}")
             
             # 主损失权重信息
             if hasattr(self, 'loss1_ema') and hasattr(self, 'loss2_ema'):
@@ -510,7 +490,9 @@ class dsnet(nn.Module):
                 else:
                     self.logger.log_string(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
                         f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
+        
         loss_weight_list = [loss1_weight, loss2_weight]
+        loss2_weight_list = channel_weights
         losses = [ddim_loss1_weighted, ddim_loss2_weighted]
         return losses, loss_weight_list, loss2_weight_list
 
