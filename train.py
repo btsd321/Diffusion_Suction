@@ -257,6 +257,7 @@ def train_one_epoch(loader, epoch, input):
             'train loss2': losses[1].item(),
             'grad_norm': total_norm,  # 每个batch都包含梯度范数
         }
+        
         input.logger.update_state_dict(log_state_dict)
         torch.cuda.empty_cache()  # 释放未使用显存
 
@@ -438,6 +439,8 @@ def train_environment_init():
     if input.gpus_is:
         # (use_vis_branch, return_loss)
         input.net = dsnet(True, True, "cuda")
+        if input.logger is not None:
+            input.net.set_logger(input.logger)
         input.net = input.net.to(input.device)
         input.net = nn.SyncBatchNorm.convert_sync_batchnorm(input.net)
         num_gpus = torch.cuda.device_count()
@@ -453,6 +456,8 @@ def train_environment_init():
             input.writer = SummaryWriter(SummaryWriter_log_dir)   
     else:
         input.net = dsnet(True, True, "cuda")
+        if input.logger is not None:
+            input.net.set_logger(input.logger)
         input.net.to(input.device)
         if TENSORBOARD_AVAILABLE:
             input.writer = SummaryWriter(SummaryWriter_log_dir)
