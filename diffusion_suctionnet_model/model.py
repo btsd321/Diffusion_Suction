@@ -394,8 +394,10 @@ class dsnet(nn.Module):
         for i, ch in enumerate(self.bool_channels):
             pred_single = predict_results[:, :, ch]
             true_single = labels[:, :, ch].float()
-            all_channel_loss[ch] = F.binary_cross_entropy_with_logits(pred_single, true_single)
-            
+            # 归一化标签到[-bit_scale, bit_scale]
+            normed_true = (true_single * 2 - 1) * self.bit_scale
+            all_channel_loss[ch] = F.binary_cross_entropy_with_logits(pred_single, normed_true)
+
         # 为每个连续值通道单独计算损失
         for i, ch in enumerate(self.continuous_channels):
             pred_single = predict_results[:, :, ch]
