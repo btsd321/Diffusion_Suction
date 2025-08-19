@@ -402,9 +402,7 @@ class dsnet(nn.Module):
         for i, ch in enumerate(self.continuous_channels):
             pred_single = predict_results[:, :, ch]
             true_single = labels[:, :, ch]
-            # 归一化标签到[-bit_scale, bit_scale]
-            normed_true = (true_single - 0.5) * 2 * self.bit_scale
-            all_channel_loss[ch] = F.mse_loss(pred_single, normed_true)
+            all_channel_loss[ch] = F.mse_loss(pred_single, true_single)
 
         # 计算加权损失
         weight_sum = self.loss_weights['normal_flip_mask_head'] + \
