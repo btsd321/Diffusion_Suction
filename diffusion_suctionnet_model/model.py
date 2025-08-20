@@ -304,6 +304,50 @@ class dsnet(nn.Module):
                 self.logger.log_string(f"使用固定权重: {self.fixed_weights}")
             else:
                 print(f"使用固定权重: {self.fixed_weights}")
+    
+    def set_diffusion_steps(self, inference_steps=None, train_timesteps=None):
+        """
+        设置扩散模型的步数参数。
+        
+        参数:
+            inference_steps: 推理时的扩散步数，默认为20
+                - 更多步数 = 更高质量但更慢 (推荐范围: 10-100)
+                - 更少步数 = 更快但质量可能下降 (最少建议: 5)
+            train_timesteps: 训练时的总时间步数，默认为1000
+                - 影响扩散过程的精细度 (推荐范围: 500-2000)
+                - 不建议在训练过程中修改此参数
+        """
+        if inference_steps is not None:
+            assert 1 <= inference_steps <= 1000, f"推理步数必须在1-1000之间，得到: {inference_steps}"
+            old_steps = self.diffusion_inference_steps
+            self.diffusion_inference_steps = inference_steps
+            
+            msg = f"推理扩散步数已从 {old_steps} 更改为 {inference_steps}"
+            if self.logger:
+                self.logger.log_string(msg)
+            else:
+                print(msg)
+        
+        if train_timesteps is not None:
+            assert 100 <= train_timesteps <= 5000, f"训练时间步数必须在100-5000之间，得到: {train_timesteps}"
+            old_timesteps = self.scheduler.num_train_timesteps
+            
+            # 重新创建调度器
+            self.scheduler = DDIMScheduler(num_train_timesteps=train_timesteps, clip_sample=False)
+            self.pipeline = CNNDDIMPipiline(self.model, self.scheduler)
+            
+            msg = f"训练扩散时间步数已从 {old_timesteps} 更改为 {train_timesteps}"
+            if self.logger:
+                self.logger.log_string(msg)
+            else:
+                print(msg)
+                
+        # 显示当前设置
+        current_info = f"当前扩散设置 - 推理步数: {self.diffusion_inference_steps}, 训练时间步数: {self.scheduler.num_train_timesteps}"
+        if self.logger:
+            self.logger.log_string(current_info)
+        else:
+            print(current_info)
 
     def ddim_loss(self, condit, gt,):
         """
