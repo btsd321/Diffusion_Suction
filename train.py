@@ -441,6 +441,11 @@ def train_environment_init():
         input.net = dsnet(True, True, "cuda")
         if input.logger is not None:
             input.net.set_logger(input.logger)
+            
+        # 设置权重模式 - 可以选择 'dynamic' 或 'fixed'
+        input.net.set_weight_mode('fixed')  # 取消注释使用固定权重
+        # input.net.set_weight_mode('dynamic')  # 默认使用动态权重
+        
         input.net = input.net.to(input.device)
         input.net = nn.SyncBatchNorm.convert_sync_batchnorm(input.net)
         num_gpus = torch.cuda.device_count()
@@ -458,6 +463,11 @@ def train_environment_init():
         input.net = dsnet(True, True, "cuda")
         if input.logger is not None:
             input.net.set_logger(input.logger)
+            
+        # 设置权重模式 - 可以选择 'dynamic' 或 'fixed'
+        input.net.set_weight_mode('fixed')  # 取消注释使用固定权重
+        # input.net.set_weight_mode('dynamic')  # 默认使用动态权重
+        
         input.net.to(input.device)
         if TENSORBOARD_AVAILABLE:
             input.writer = SummaryWriter(SummaryWriter_log_dir)

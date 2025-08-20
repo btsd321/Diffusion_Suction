@@ -319,34 +319,6 @@ class SuctionNetInference:
         preprocessed_pc = inputs['point_clouds'].squeeze(0).cpu().numpy()  # (num_points, 3)
         preprocessed_normals = inputs['labels']['normals'].squeeze(0).cpu().numpy()  # (num_points, 3)
         
-        # 临时修改模型的pipeline调用，使用动态点数
-        original_forward = self.model.forward
-        
-        def patched_forward(inputs_dict):
-            """修补的forward函数，支持动态点数"""
-            batch_size = inputs_dict['point_clouds'].shape[0]
-            num_point = inputs_dict['point_clouds'].shape[1]
-            
-            # pointnet++提取堆叠场景点云
-            input_points = inputs_dict['point_clouds']
-            input_points = torch.cat((input_points, inputs_dict['labels']['normals']), dim=2)
-            features, global_features = self.model.backbone(input_points)
-
-            # 推理模式
-            pred_results = self.model.pipeline(   
-                batch_size=batch_size,
-                device=features.device,
-                dtype=features.dtype,
-                shape=(num_point, 4),  # 使用动态点数
-                features=features,
-                num_inference_steps=self.model.diffusion_inference_steps,
-            )
-            ddim_loss = None
-            return pred_results, ddim_loss
-        
-        # 暂时替换forward方法
-        self.model.forward = patched_forward
-        
         try:
             # 模型推理 - 优化时间测量
             # 预热GPU（第一次推理可能较慢）
@@ -365,10 +337,10 @@ class SuctionNetInference:
             
             inference_end = time.perf_counter()
             performance_stats['inference_time'] = inference_end - inference_start
-            
-        finally:
-            # 恢复原始forward方法
-            self.model.forward = original_forward
+        except Exception as e:
+            print(f"模型推理失败: {e}")
+            return {}, preprocessed_pc, performance_stats
+
         
         if self.enable_profiling:
             self.memory_profiler.log_memory("模型推理后")

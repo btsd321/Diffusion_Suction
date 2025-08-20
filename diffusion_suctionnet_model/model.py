@@ -214,6 +214,25 @@ class dsnet(nn.Module):
         self.return_loss = return_loss
         self.pointnet_type = pointnet_type
         self.debug_loss = True  # 启用调试模式，打印各个损失的数值
+        
+        # 权重模式设置：'dynamic' 或 'fixed'
+        self.weight_mode = 'dynamic'  # 默认使用动态权重
+        
+        # 固定权重设置（基于训练日志分析的推荐值）
+        self.fixed_weights = {
+            # 通道权重：用于平衡不同损失类型的量级差异
+            'channel_weights': {
+                'normal_flip_mask_head': 1.0,      # BCE损失，通道0
+                'wrench_scores_head': 20.0,        # MSE损失，需要更大权重因为数值较小
+                'feasibility_scores_head': 1.0,    # BCE损失，通道2  
+                'visibility_scores_head': 15.0     # MSE损失，需要更大权重因为数值较小
+            },
+            # 主损失权重：用于平衡扩散损失和重建损失
+            'main_loss_weights': {
+                'loss1_weight': 0.8,  # 扩散损失权重
+                'loss2_weight': 1.2   # 重建损失权重
+            }
+        }
 
         backbone_config = {
             'npoint_per_layer': [4096,1024,256,64],
@@ -247,6 +266,44 @@ class dsnet(nn.Module):
             logger: 日志记录器实例
         """
         self.logger = logger
+    
+    def set_weight_mode(self, mode='dynamic', custom_weights=None):
+        """
+        设置损失权重模式。
+        
+        参数:
+            mode: 权重模式，'dynamic' 或 'fixed'
+            custom_weights: 自定义权重字典，格式如下：
+                {
+                    'channel_weights': {
+                        'normal_flip_mask_head': 1.0,
+                        'wrench_scores_head': 20.0,
+                        'feasibility_scores_head': 1.0,
+                        'visibility_scores_head': 15.0
+                    },
+                    'main_loss_weights': {
+                        'loss1_weight': 0.8,
+                        'loss2_weight': 1.2
+                    }
+                }
+        """
+        assert mode in ['dynamic', 'fixed'], f"权重模式必须是 'dynamic' 或 'fixed'，得到: {mode}"
+        
+        self.weight_mode = mode
+        
+        if custom_weights is not None:
+            self.fixed_weights = custom_weights
+            
+        if self.logger:
+            self.logger.log_string(f"损失权重模式已切换为: {mode}")
+        else:
+            print(f"损失权重模式已切换为: {mode}")
+            
+        if mode == 'fixed':
+            if self.logger:
+                self.logger.log_string(f"使用固定权重: {self.fixed_weights}")
+            else:
+                print(f"使用固定权重: {self.fixed_weights}")
 
     def ddim_loss(self, condit, gt,):
         """
@@ -386,9 +443,8 @@ class dsnet(nn.Module):
         for i, ch in enumerate(self.bool_channels):
             pred_single = predict_results[:, :, ch]
             true_single = labels[:, :, ch].float()
-            # 归一化标签到[-bit_scale, bit_scale]
-            normed_true = (true_single * 2 - 1) * self.bit_scale
-            all_channel_loss[ch] = F.binary_cross_entropy_with_logits(pred_single, normed_true)
+            # BCE损失的target应该是0或1，不需要归一化
+            all_channel_loss[ch] = F.binary_cross_entropy_with_logits(pred_single, true_single)
 
         # 为每个连续值通道单独计算损失
         for i, ch in enumerate(self.continuous_channels):
@@ -396,56 +452,94 @@ class dsnet(nn.Module):
             true_single = labels[:, :, ch]
             all_channel_loss[ch] = F.mse_loss(pred_single, true_single)
 
-        # 计算加权损失
-        weight_sum = self.loss_weights['normal_flip_mask_head'] + \
-                      self.loss_weights['wrench_scores_head'] + \
-                      self.loss_weights['feasibility_scores_head'] + \
-                      self.loss_weights['visibility_scores_head']
-        channel_weights = [
-            self.loss_weights['normal_flip_mask_head'] / weight_sum,    # 通道0
-            self.loss_weights['wrench_scores_head'] / weight_sum,       # 通道1
-            self.loss_weights['feasibility_scores_head'] / weight_sum,  # 通道2
-            self.loss_weights['visibility_scores_head'] / weight_sum    # 通道3
-        ]
+        # 动态权重平衡策略 - 平衡BCE和MSE损失的量级差异
+        if self.weight_mode == 'dynamic':
+            # 使用动态权重
+            with torch.no_grad():
+                # 计算各损失的相对大小
+                losses_values = [loss.item() if hasattr(loss, 'item') else loss for loss in all_channel_loss]
+                # 计算动态缩放因子，让不同类型的损失在相似的数量级
+                # BCE损失通常在0-1范围，MSE损失可能很大，需要平衡
+                max_loss = max(losses_values)
+                if max_loss > 0:
+                    dynamic_scale_factors = [max_loss / (loss + 1e-8) for loss in losses_values]
+                    # 限制缩放因子的范围，避免过度放大小损失
+                    dynamic_scale_factors = [min(max(scale, 0.1), 10.0) for scale in dynamic_scale_factors]
+                else:
+                    dynamic_scale_factors = [1.0, 1.0, 1.0, 1.0]
+            
+            # 基础权重
+            base_weights = [
+                self.loss_weights['normal_flip_mask_head'],    # 通道0
+                self.loss_weights['wrench_scores_head'],       # 通道1
+                self.loss_weights['feasibility_scores_head'],  # 通道2
+                self.loss_weights['visibility_scores_head']    # 通道3
+            ]
+            
+            # 最终权重 = 基础权重 × 动态缩放因子
+            final_weights = [base * scale for base, scale in zip(base_weights, dynamic_scale_factors)]
+            
+        else:  # fixed mode
+            # 使用固定权重
+            final_weights = [
+                self.fixed_weights['channel_weights']['normal_flip_mask_head'],      # 通道0
+                self.fixed_weights['channel_weights']['wrench_scores_head'],         # 通道1
+                self.fixed_weights['channel_weights']['feasibility_scores_head'],   # 通道2
+                self.fixed_weights['channel_weights']['visibility_scores_head']     # 通道3
+            ]
         
-        # 动态权重平衡策略 - 根据损失值自动调整权重
-        with torch.no_grad():
-            # 计算各损失的相对大小
-            losses_values = [loss.item() if hasattr(loss, 'item') else loss for loss in all_channel_loss]
-            # 找到最大损失作为基准
-            max_loss = max(losses_values)
-            # 计算动态缩放因子，让所有损失在相似的数量级
-            dynamic_scale_factors = [max_loss / (loss + 1e-8) for loss in losses_values]
-            # 限制缩放因子的范围，避免过度放大
-            dynamic_scale_factors = [min(scale, 20.0) for scale in dynamic_scale_factors]
-        # 加权组合损失 - 使用动态权重
-        ddim_loss2 = sum(loss * weight * scale for loss, weight, scale in zip(all_channel_loss, channel_weights, dynamic_scale_factors)) / sum(weight * scale for weight, scale in zip(channel_weights, dynamic_scale_factors))
+        # 加权组合损失（先计算ddim_loss2）
+        ddim_loss2 = sum(loss * weight for loss, weight in zip(all_channel_loss, final_weights)) / sum(final_weights)
         
-        # Loss1和Loss2之间的动态权重平衡策略
-        loss1_val = ddim_loss1.item()
-        loss2_val = ddim_loss2.item()
-        
-        # 计算动态权重，让两个损失在相似的贡献度
-        if loss1_val > 0 and loss2_val > 0:
-            # 使用指数移动平均来稳定权重计算
-            if not hasattr(self, 'loss1_ema'):
-                self.loss1_ema = loss1_val
-                self.loss2_ema = loss2_val
+        # 计算主损失权重（Loss1和Loss2之间的平衡）
+        if self.weight_mode == 'dynamic':
+            # Loss1和Loss2之间的动态权重平衡
+            loss1_val = ddim_loss1.item()
+            loss2_val = ddim_loss2.item()
+            
+            # 计算动态权重，让两个损失贡献相当
+            if loss1_val > 0 and loss2_val > 0:
+                # 使用指数移动平均来稳定权重计算
+                if not hasattr(self, 'loss1_ema'):
+                    self.loss1_ema = loss1_val
+                    self.loss2_ema = loss2_val
+                else:
+                    self.loss1_ema = 0.9 * self.loss1_ema + 0.1 * loss1_val
+                    self.loss2_ema = 0.9 * self.loss2_ema + 0.1 * loss2_val
+                
+                # 计算平衡权重
+                avg_loss = (self.loss1_ema + self.loss2_ema) / 2
+                loss1_weight = avg_loss / (self.loss1_ema + 1e-8)
+                loss2_weight = avg_loss / (self.loss2_ema + 1e-8)
+                
+                # 限制权重范围，避免过度调整
+                loss1_weight = max(0.1, min(5.0, loss1_weight))
+                loss2_weight = max(0.1, min(5.0, loss2_weight))
             else:
-                self.loss1_ema = 0.9 * self.loss1_ema + 0.1 * loss1_val
-                self.loss2_ema = 0.9 * self.loss2_ema + 0.1 * loss2_val
-            
-            # 计算平衡权重
-            total_ema = self.loss1_ema + self.loss2_ema
-            loss1_weight = total_ema / (2 * self.loss1_ema + 1e-8)  # 扩散损失权重
-            loss2_weight = total_ema / (2 * self.loss2_ema + 1e-8)  # 重建损失权重
-            
-            # 限制权重范围，避免过度调整
-            loss1_weight = max(0.5, min(3.0, loss1_weight))
-            loss2_weight = max(0.5, min(3.0, loss2_weight))
+                loss1_weight = 1.0
+                loss2_weight = 1.0
+        else:  # fixed mode
+            loss1_weight = self.fixed_weights['main_loss_weights']['loss1_weight']
+            loss2_weight = self.fixed_weights['main_loss_weights']['loss2_weight']
+        
+        # 加权组合损失（移到这里，确保在所有模式下都能计算）
+        ddim_loss2 = sum(loss * weight for loss, weight in zip(all_channel_loss, final_weights)) / sum(final_weights)
+        
+        # 为EMA更新（适用于所有模式）
+        if not hasattr(self, 'loss1_ema'):
+            self.loss1_ema = ddim_loss1.item()
+            self.loss2_ema = ddim_loss2.item()
         else:
-            loss1_weight = 1.0
-            loss2_weight = 1.0
+            self.loss1_ema = 0.9 * self.loss1_ema + 0.1 * ddim_loss1.item()
+            self.loss2_ema = 0.9 * self.loss2_ema + 0.1 * ddim_loss2.item()
+        
+        # 使用指数移动平均来记录损失的历史值，仅用于监控
+        if not hasattr(self, 'loss1_ema'):
+            self.loss1_ema = ddim_loss1.item()
+            self.loss2_ema = ddim_loss2.item()
+        else:
+            self.loss1_ema = 0.9 * self.loss1_ema + 0.1 * ddim_loss1.item()
+            self.loss2_ema = 0.9 * self.loss2_ema + 0.1 * ddim_loss2.item()
         
         # 应用主损失权重
         ddim_loss1_weighted = loss1_weight * ddim_loss1
@@ -476,15 +570,16 @@ class dsnet(nn.Module):
             
             # 主损失权重信息
             if hasattr(self, 'loss1_ema') and hasattr(self, 'loss2_ema'):
+                mode_info = f"[{self.weight_mode.upper()}]"
                 if self.logger is None:
-                    print(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
+                    print(f"{mode_info} Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
                         f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
                 else:
-                    self.logger.log_string(f"Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
+                    self.logger.log_string(f"{mode_info} Main Loss weights - L1: {loss1_weight:.3f}, L2: {loss2_weight:.3f} | "
                         f"EMA - L1: {self.loss1_ema:.4f}, L2: {self.loss2_ema:.4f}")
         
         loss_weight_list = [loss1_weight, loss2_weight]
-        loss2_weight_list = channel_weights
+        loss2_weight_list = final_weights  # 使用动态调整后的权重
         losses = [ddim_loss1_weighted, ddim_loss2_weighted]
         return losses, loss_weight_list, loss2_weight_list
 
